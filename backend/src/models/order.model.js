@@ -101,9 +101,27 @@ const updateOrderStatus = async (id, status, txSignature = null) => {
   }
 };
 
+/**
+ * Lấy danh sách tất cả các đơn hàng trong hệ thống (Sắp xếp mới nhất lên đầu)
+ * @returns {Promise<Array>} Danh sách tất cả các đơn hàng
+ */
+const getAllOrders = async () => {
+  const queryText = 'SELECT * FROM orders ORDER BY created_at DESC;';
+  
+  try {
+    const res = await db.query(queryText);
+    return res.rows;
+  } catch (error) {
+    console.error('Lỗi trong getAllOrders:', error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   createOrder,
   getOrderById,
   getOrderByReference,
-  updateOrderStatus
+  updateOrderStatus,
+  getAllOrders
 };
+
