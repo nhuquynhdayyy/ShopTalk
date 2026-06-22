@@ -1,6 +1,6 @@
-# 📋 Phân công nhiệm vụ FULL VERSION (ShopTalk)
+# 📋 Phân công nhiệm vụ
 
-## 🟢 Nguyên tắc chung: "Làm việc trên đảo độc lập"
+## 🟢 Nguyên tắc chung:
 *   Mỗi người làm trên folder riêng đã phân chia.
 *   **Mock Data:** Nếu cần dữ liệu từ người khác chưa xong → tự tạo hardcode để chạy trước.
 *   **Điểm kết nối duy nhất:** Bảng `orders` trong DB và cấu trúc JSON đã chốt.
