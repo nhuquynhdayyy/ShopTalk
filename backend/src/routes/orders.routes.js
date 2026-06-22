@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { Keypair } = require('@solana/web3.js');
-const { createOrder, getOrderById, getAllOrders } = require('../models/order.model');
+const { createOrder, getOrderById, getAllOrders, updateOrderStatus } = require('../models/order.model');
+const { verifyPayment } = require('../services/solanaPay.service');
 
 /**
  * Route: GET /orders
@@ -97,6 +98,71 @@ router.get('/:id', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Lỗi hệ thống khi tìm kiếm đơn hàng'
+    });
+  }
+});
+
+/**
+ * Route: GET /orders/:id/check-payment
+ * Mô tả: Thực hiện kiểm tra và xác thực giao dịch thanh toán Solana Pay trên blockchain.
+ * Nếu hợp lệ, cập nhật trạng thái đơn hàng sang 'paid' và lưu lại chữ ký giao dịch.
+ */
+router.get('/:id/check-payment', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Tìm đơn hàng
+    const order = await getOrderById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: `Không tìm thấy đơn hàng với ID: ${id}`
+      });
+    }
+
+    // Nếu đơn hàng đã ở trạng thái paid, trả về thành công luôn
+    if (order.status === 'paid') {
+      return res.status(200).json({
+        success: true,
+        message: 'Đơn hàng đã được thanh toán thành công.',
+        data: order
+      });
+    }
+
+    // 2. Gọi service đối soát giao dịch thanh toán
+    const verification = await verifyPayment(order.reference, order.amount, order.seller_wallet);
+
+    if (!verification.success) {
+      // Chưa có giao dịch → 202 Accepted (đang chờ, tiếp tục poll)
+      if (verification.error === 'PAYMENT_NOT_FOUND') {
+        return res.status(202).json({
+          success: false,
+          error: verification.error,
+          message: verification.message
+        });
+      }
+      // Lỗi xác thực thực sự → 400 Bad Request
+      return res.status(400).json({
+        success: false,
+        error: verification.error,
+        message: verification.message
+      });
+    }
+
+    // 3. Đối soát thành công: Cập nhật cơ sở dữ liệu
+    const updatedOrder = await updateOrderStatus(id, 'paid', verification.signature);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Xác nhận thanh toán đơn hàng thành công!',
+      data: updatedOrder
+    });
+
+  } catch (error) {
+    console.error(`Lỗi khi check-payment cho đơn hàng ${req.params.id}:`, error.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Lỗi hệ thống khi xác thực thanh toán'
     });
   }
 });

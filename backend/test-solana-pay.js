@@ -4,6 +4,7 @@ const { createPaymentRequest, generateQRCode } = require('./src/services/solanaP
 const fs = require('fs');
 const path = require('path');
 const { Keypair } = require('@solana/web3.js');
+const http = require('http');
 
 async function testSolanaPay() {
   console.log('=== KHỞI CHẠY KIỂM THỬ TÍCH HỢP SOLANA PAY & QR CODE ===\n');
@@ -113,11 +114,69 @@ async function testSolanaPay() {
     const htmlPath = path.join(__dirname, 'test-qr.html');
     fs.writeFileSync(htmlPath, htmlContent);
     console.log(`\n✅ Bước 4: Đã lưu file HTML hiển thị QR Code tại: ${htmlPath}`);
-    console.log('\n🎉 ĐÃ THỰC THI KIỂM THỬ XONG! Hãy mở file test-qr.html để quét mã QR thanh toán thử nghiệm.');
+    console.log('\n🎉 Hãy mở file test-qr.html và quét mã QR để thanh toán.');
+
+    // 6. Bắt đầu vòng lặp kiểm tra thanh toán qua endpoint check-payment
+    console.log('\n⏳ Đang lắng nghe thanh toán (Kiểm tra trạng thái mỗi 15 giây)...');
+    
+    const checkInterval = setInterval(async () => {
+      const options = {
+        hostname: 'localhost',
+        port: process.env.PORT || 3000,
+        path: `/orders/${mockOrder.id}/check-payment`,
+        method: 'GET'
+      };
+
+      const req = http.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', async () => {
+          try {
+            // Xử lý khi phản hồi lỗi
+            if (res.statusCode >= 400) {
+              // Lỗi thực sự (4xx/5xx nhưng không phải 202) → in cảnh báo
+              try {
+                const errResult = JSON.parse(data);
+                console.log(`\n⚠️ Lỗi từ check-payment (status ${res.statusCode}):`, errResult.message || data);
+              } catch (_) {
+                console.log(`\n⚠️ Lỗi từ check-payment (status ${res.statusCode}):`, data);
+              }
+              return;
+            }
+            // 202 Accepted = chưa có thanh toán hoặc đang chờ RPC → in dấu chấm
+            if (res.statusCode === 202) {
+              process.stdout.write('.');
+              return;
+            }
+
+            const result = JSON.parse(data);
+            if (result.success && result.data && result.data.status === 'paid') {
+              console.log('\n\n🎉 [THÀNH CÔNG] ĐƠN HÀNG ĐÃ ĐƯỢC XÁC NHẬN THANH TOÁN TRÊN BLOCKCHAIN!');
+              console.log(`   - ID Đơn hàng: ${result.data.id}`);
+              console.log(`   - Chữ ký Giao dịch: ${result.data.tx_signature}`);
+              console.log(`   - Trạng thái DB: ${result.data.status}`);
+              
+              clearInterval(checkInterval);
+              await pool.end();
+              process.exit(0);
+            } else {
+              process.stdout.write('.');
+            }
+          } catch (e) {
+            console.error('\n❌ Lỗi parse dữ liệu từ check-payment:', e.message);
+          }
+        });
+      });
+
+      req.on('error', (err) => {
+        console.error('\n❌ Lỗi kết nối tới Server Backend (Hãy đảm bảo npm start đang chạy):', err.message);
+      });
+
+      req.end();
+    }, 15000);
 
   } catch (error) {
     console.error('\n❌ Thử nghiệm thất bại. Lỗi xảy ra:', error.message);
-  } finally {
     await pool.end();
   }
 }
