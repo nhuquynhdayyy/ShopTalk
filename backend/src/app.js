@@ -6,6 +6,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const ordersRouter = require('./routes/orders.routes');
+const paymentRouter = require('./routes/payment.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +17,7 @@ app.use(express.json()); // Hỗ trợ đọc dữ liệu JSON gửi lên trong 
 
 // Đăng ký route quản lý đơn hàng
 app.use('/orders', ordersRouter);
+app.use('/payment', paymentRouter);
 
 // Endpoint mặc định kiểm tra trạng thái hoạt động của Server
 app.get('/', (req, res) => {
