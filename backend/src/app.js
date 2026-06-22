@@ -10,11 +10,17 @@ const paymentRouter = require('./routes/payment.routes');
 const aiRouter = require('./routes/ai.routes');
 const { startPaymentWatcher, stopPaymentWatcher } = require('./workers/paymentWatcher');
 
+const http = require('http');
+const { initSocket } = require('./websocket/socket.server');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Đăng ký các middleware cơ bản
-app.use(cors()); // Cho phép gọi API xuyên miền (CORS) phục vụ cho Frontend
+app.use(cors({
+  origin: '*', // Cho phép gọi API xuyên miền (CORS) phục vụ cho Frontend
+  methods: ['GET', 'POST']
+})); 
 app.use(express.json()); // Hỗ trợ đọc dữ liệu JSON gửi lên trong req.body
 
 // Đăng ký route quản lý đơn hàng
@@ -30,8 +36,14 @@ app.get('/', (req, res) => {
   });
 });
 
-// Khởi chạy server Express
-const server = app.listen(PORT, () => {
+// Tạo Server HTTP từ app Express
+const server = http.createServer(app);
+
+// Khởi tạo Socket.io Server
+initSocket(server);
+
+// Khởi chạy server HTTP
+server.listen(PORT, () => {
   console.log(`🚀 Server backend đã khởi chạy thành công tại cổng ${PORT}`);
   console.log(`👉 API Đơn hàng: http://localhost:${PORT}/orders`);
 

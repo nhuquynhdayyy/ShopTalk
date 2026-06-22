@@ -129,8 +129,18 @@ router.get('/:id/check-payment', async (req, res) => {
       });
     }
 
-    // 2. Gọi service đối soát giao dịch thanh toán
-    const verification = await verifyPayment(order.reference, order.amount, order.seller_wallet);
+    // 2. Gọi service đối soát giao dịch thanh toán (Hoặc giả lập nếu simulate=true)
+    const isSimulation = req.query.simulate === 'true';
+    let verification;
+    if (isSimulation) {
+      verification = {
+        success: true,
+        signature: 'simulated_tx_' + Math.random().toString(36).substring(2, 11)
+      };
+      console.log(`[Simulate] Đang giả lập thanh toán cho đơn hàng #${id}`);
+    } else {
+      verification = await verifyPayment(order.reference, order.amount, order.seller_wallet);
+    }
 
     if (!verification.success) {
       // Chưa có giao dịch hoặc RPC đang bị rate limit → 202 Accepted (tiếp tục chờ)

@@ -94,7 +94,20 @@ const updateOrderStatus = async (id, status, txSignature = null) => {
   
   try {
     const res = await db.query(queryText, [id, status, txSignature]);
-    return res.rows[0] || null;
+    const updatedOrder = res.rows[0] || null;
+    if (updatedOrder) {
+      try {
+        const { getIo } = require('../websocket/socket.server');
+        const io = getIo();
+        if (io) {
+          io.emit('order_status_updated', updatedOrder);
+          console.log(`[Socket.io] 📢 Đã phát sự kiện 'order_status_updated' cho đơn hàng #${id}`);
+        }
+      } catch (wsErr) {
+        console.error('[Socket.io] Lỗi khi phát sự kiện cập nhật trạng thái:', wsErr.message);
+      }
+    }
+    return updatedOrder;
   } catch (error) {
     console.error(`Lỗi trong updateOrderStatus với ID ${id}:`, error.message);
     throw error;
