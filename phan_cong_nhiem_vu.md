@@ -1,6 +1,6 @@
 # 📋 Phân công nhiệm vụ
 
-## 🟢 Nguyên tắc chung: 
+## 🟢 Nguyên tắc chung:
 *   Mỗi người làm trên folder riêng đã phân chia.
 *   **Mock Data:** Nếu cần dữ liệu từ người khác chưa xong → tự tạo hardcode để chạy trước.
 *   **Điểm kết nối duy nhất:** Bảng `orders` trong DB và cấu trúc JSON đã chốt:
@@ -46,20 +46,20 @@
     *   Khi khách chốt mua, AI phải tự trích xuất: Tên khách, địa chỉ, danh sách SP, tổng tiền.
 3.  **Dữ liệu sản phẩm & Fuzzy Search:**
     *   Hoàn thiện `products.json`: Thêm ít nhất 7-10 sản phẩm khác (phụ kiện điện thoại, áo thun, mũ, phụ kiện crypto,...) với đầy đủ `id`, `name`, `price_usdc`, `stock`, `description`.
-    *   Viết hàm tìm kiếm thông minh tại file [inventory.service.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/services/inventory.service.js) → dùng `fuse.js` (nếu cần cài: `cd backend && npm install fuse.js`) để tìm kiếm không phân biệt dấu, gõ sai chính tả vẫn ra (vd: "áo đỏ" → ra "Áo thun màu đỏ").
+    *   Viết hàm tìm kiếm thông minh tại file [inventory.service.js](/ShopTalk/backend/src/services/inventory.service.js) → dùng `fuse.js` (nếu cần cài: `cd backend && npm install fuse.js`) để tìm kiếm không phân biệt dấu, gõ sai chính tả vẫn ra (vd: "áo đỏ" → ra "Áo thun màu đỏ").
 4.  **Escalation (Chuyển người thật):**
     *   Nếu khách hỏi câu khó, yêu cầu "gặp chủ shop", "khiếu nại", "nói với người thật" → AI trả về `action: "human_escalation"` và `escalate: true`.
     *   **Bắn WebSocket:** Khi cờ `escalate = true`, bắn sự kiện `escalation_request` tới Dashboard với nội dung: `sessionId`, `message` (tin nhắn cuối user), `timestamp`.
 5.  **Mocking (Độc lập):**
     *   Không cần đợi Blockchain: Viết hàm `createMockOrder()` trả về ID đơn hàng ngẫu nhiên và hiển thị "Mã QR của bạn đây (Ảnh giả)".
-    *   File cần chỉnh: [ai.service.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/services/ai.service.js).
+    *   File cần chỉnh: [ai.service.js](/ShopTalk/backend/src/services/ai.service.js).
 
 ### 📁 File làm việc:
-*   [products.json](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/data/products.json)
-*   [inventory.service.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/services/inventory.service.js)
-*   [ai.service.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/services/ai.service.js)
-*   [socket.server.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/websocket/socket.server.js)
-*   [ai.routes.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/routes/ai.routes.js) (nếu cần thêm API Agora)
+*   [products.json](/ShopTalk/backend/data/products.json)
+*   [inventory.service.js](/ShopTalk/backend/src/services/inventory.service.js)
+*   [ai.service.js](/ShopTalk/backend/src/services/ai.service.js)
+*   [socket.server.js](/ShopTalk/backend/src/websocket/socket.server.js)
+*   [ai.routes.js](/ShopTalk/backend/src/routes/ai.routes.js) (nếu cần thêm API Agora)
 
 ### ✅ Tiêu chí hoàn thành:
 *   AI phản hồi nhanh, đúng văn phong.
@@ -94,10 +94,10 @@
 
 ### 📁 File làm việc:
 *   `backend/src/services/verify.service.js` (Tạo mới)
-*   [order.model.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/models/order.model.js) (thêm hàm cần thiết)
+*   [order.model.js](/ShopTalk/backend/src/models/order.model.js) (thêm hàm cần thiết)
 *   `backend/src/workers/expirationCron.js` (Tạo mới)
-*   [app.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/app.js) (start cronjob khi server chạy)
-*   [paymentWatcher.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/workers/paymentWatcher.js) (nếu cần tích hợp)
+*   [app.js](/ShopTalk/backend/src/app.js) (start cronjob khi server chạy)
+*   [paymentWatcher.js](/ShopTalk/backend/src/workers/paymentWatcher.js) (nếu cần tích hợp)
 
 ### ✅ Tiêu chí hoàn thành:
 *   5 điều kiện `verifyPayment` được kiểm tra 100%.
@@ -113,12 +113,12 @@
 
 ### 🔧 Nhiệm vụ chi tiết:
 1.  **Chat Widget (Phía khách hàng):**
-    *   File: [ChatWidget.jsx](file:///d:/CONVO%20HACKATHON/ShopTalk/frontend/src/pages/ChatWidget.jsx).
+    *   File: [ChatWidget.jsx](/ShopTalk/frontend/src/pages/ChatWidget.jsx).
     *   Thiết kế đẹp: UI chuyên nghiệp, có hiệu ứng gõ chữ (typing indicator) mượt.
     *   **QR Code chuyên nghiệp:** Khi AI gửi mã QR → hiện Modal mã QR to, rõ, kèm nút "Copy địa chỉ ví".
     *   **Escalation UI:** Khi `isEscalated = true` → hiển thị giao diện "Nhân viên đang hỗ trợ" với avatar nhân viên thật và tin nhắn chào mời.
 2.  **Merchant Dashboard (Phía chủ shop):**
-    *   File: [Dashboard.jsx](file:///d:/CONVO%20HACKATHON/ShopTalk/frontend/src/pages/Dashboard.jsx).
+    *   File: [Dashboard.jsx](/ShopTalk/frontend/src/pages/Dashboard.jsx).
     *   **Real-time orders:** Danh sách đơn hàng cập nhật tức thì qua Socket.io. Đơn vừa `paid` → nhảy lên đầu danh sách.
     *   **Âm thanh "Ting ting":** Phát âm thanh (đã có sẵn `playChime()`) khi đơn hàng thành `paid`.
     *   **Modal Off-ramp chuyên nghiệp:**
@@ -127,7 +127,7 @@
         *   Hiện tỷ giá giả định.
         *   **Thêm biểu đồ tỷ giá:** Dùng `recharts` (nếu cần cài: `cd frontend && npm install recharts`) để vẽ biểu đồ tỷ giá USDC/VND giả lập.
 3.  **WebSocket ổn định:**
-    *   File: [useWebSocket.js](file:///d:/CONVO%20HACKATHON/ShopTalk/frontend/src/hooks/useWebSocket.js).
+    *   File: [useWebSocket.js](/ShopTalk/frontend/src/hooks/useWebSocket.js).
     *   Thêm logic reconnect tự động khi mất kết nối.
     *   Hiển thị trạng thái kết nối (online/offline) trên Dashboard.
 4.  **Xử lý Escalation trên Dashboard:**
@@ -136,11 +136,11 @@
     *   Không cần Backend xong: Tạo `const mockMessages = [...]` và `const mockOrders = [...]` ngay trong file React/Vite để dàn layout. Sau đó thay bằng API thật khi Backend hoàn thành.
 
 ### 📁 File làm việc:
-*   [ChatWidget.jsx](file:///d:/CONVO%20HACKATHON/ShopTalk/frontend/src/pages/ChatWidget.jsx)
-*   [Dashboard.jsx](file:///d:/CONVO%20HACKATHON/ShopTalk/frontend/src/pages/Dashboard.jsx)
-*   [useWebSocket.js](file:///d:/CONVO%20HACKATHON/ShopTalk/frontend/src/hooks/useWebSocket.js)
+*   [ChatWidget.jsx](/ShopTalk/frontend/src/pages/ChatWidget.jsx)
+*   [Dashboard.jsx](/ShopTalk/frontend/src/pages/Dashboard.jsx)
+*   [useWebSocket.js](/ShopTalk/frontend/src/hooks/useWebSocket.js)
 *   `frontend/src/components/` (tạo thêm component nếu cần)
-*   [api.js](file:///d:/CONVO%20HACKATHON/ShopTalk/frontend/src/api.js) (nếu cần thêm API call)
+*   [api.js](/ShopTalk/frontend/src/api.js) (nếu cần thêm API call)
 
 ### ✅ Tiêu chí hoàn thành:
 *   UI Chat và Dashboard đẹp, chuyên nghiệp, có animation mượt.
@@ -193,4 +193,4 @@ git push origin [tên-nhánh-của-mình]
     ```
 *   Commit message phải rõ ràng, viết bằng tiếng Việt hoặc tiếng Anh đều được, miễn dễ hiểu.
 *   **Không** push code trực tiếp lên nhánh `main`.
-*   Sau khi push xong, thông báo cho Lead (Quỳnh) để tạo Pull Request (PR) và merge.
+*   Sau khi push xong, tạo Pull Request (PR) và thông báo cho team.
