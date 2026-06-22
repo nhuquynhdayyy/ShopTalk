@@ -7,6 +7,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const ordersRouter = require('./routes/orders.routes');
 const paymentRouter = require('./routes/payment.routes');
+const { startPaymentWatcher, stopPaymentWatcher } = require('./workers/paymentWatcher');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,9 +29,25 @@ app.get('/', (req, res) => {
 });
 
 // Khởi chạy server Express
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server backend đã khởi chạy thành công tại cổng ${PORT}`);
   console.log(`👉 API Đơn hàng: http://localhost:${PORT}/orders`);
+
+  // Khởi động Payment Watcher sau khi server đã sẵn sàng
+  startPaymentWatcher();
 });
 
+// Graceful shutdown — dừng watcher trước khi tắt process
+const shutdown = () => {
+  console.log('\n[App] Đang tắt server...');
+  stopPaymentWatcher();
+  server.close(() => {
+    console.log('[App] Server đã dừng hoàn toàn.');
+    process.exit(0);
+  });
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
 module.exports = app;
+

@@ -116,14 +116,14 @@ async function testSolanaPay() {
     console.log(`\n✅ Bước 4: Đã lưu file HTML hiển thị QR Code tại: ${htmlPath}`);
     console.log('\n🎉 Hãy mở file test-qr.html và quét mã QR để thanh toán.');
 
-    // 6. Bắt đầu vòng lặp kiểm tra thanh toán qua endpoint check-payment
-    console.log('\n⏳ Đang lắng nghe thanh toán (Kiểm tra trạng thái mỗi 15 giây)...');
+    // 6. Bắt đầu vòng lặp kiểm tra trạng thái đơn hàng từ Database (đã được paymentWatcher tự động xác thực)
+    console.log('\n⏳ Đang lắng nghe thanh toán (Kiểm tra trạng thái mỗi 2 giây)...');
     
     const checkInterval = setInterval(async () => {
       const options = {
         hostname: 'localhost',
         port: process.env.PORT || 3000,
-        path: `/orders/${mockOrder.id}/check-payment`,
+        path: `/orders/${mockOrder.id}`,
         method: 'GET'
       };
 
@@ -134,18 +134,12 @@ async function testSolanaPay() {
           try {
             // Xử lý khi phản hồi lỗi
             if (res.statusCode >= 400) {
-              // Lỗi thực sự (4xx/5xx nhưng không phải 202) → in cảnh báo
               try {
                 const errResult = JSON.parse(data);
-                console.log(`\n⚠️ Lỗi từ check-payment (status ${res.statusCode}):`, errResult.message || data);
+                console.log(`\n⚠️ Lỗi từ server (status ${res.statusCode}):`, errResult.message || data);
               } catch (_) {
-                console.log(`\n⚠️ Lỗi từ check-payment (status ${res.statusCode}):`, data);
+                console.log(`\n⚠️ Lỗi từ server (status ${res.statusCode}):`, data);
               }
-              return;
-            }
-            // 202 Accepted = chưa có thanh toán hoặc đang chờ RPC → in dấu chấm
-            if (res.statusCode === 202) {
-              process.stdout.write('.');
               return;
             }
 
@@ -163,7 +157,7 @@ async function testSolanaPay() {
               process.stdout.write('.');
             }
           } catch (e) {
-            console.error('\n❌ Lỗi parse dữ liệu từ check-payment:', e.message);
+            console.error('\n❌ Lỗi parse dữ liệu từ server:', e.message);
           }
         });
       });
@@ -173,7 +167,7 @@ async function testSolanaPay() {
       });
 
       req.end();
-    }, 15000);
+    }, 2000);
 
   } catch (error) {
     console.error('\n❌ Thử nghiệm thất bại. Lỗi xảy ra:', error.message);

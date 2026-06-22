@@ -192,13 +192,19 @@ const verifyPayment = async (reference, expectedAmount, expectedRecipient) => {
       message: 'Chưa tìm thấy giao dịch hợp lệ. Có thể chưa thanh toán hoặc số tiền không khớp.',
     };
   } catch (error) {
-    // Trả về PAYMENT_NOT_FOUND nếu là rate limit — để polling tiếp tục
-    if (error.message && error.message.includes('rate limit')) {
-      console.log('[Verify] ⚠️ RPC rate limit - sẽ thử lại sau...');
+    // Phân biệt rate limit (429) với lỗi thực sự
+    const isRateLimit = error.message && (
+      error.message.includes('rate limit') ||
+      error.message.includes('429') ||
+      error.message.includes('Too Many Requests')
+    );
+
+    if (isRateLimit) {
+      console.warn('[Verify] ⚠️ RPC rate limit (429) — paymentWatcher sẽ tăng backoff...');
       return {
         success: false,
-        error: 'PAYMENT_NOT_FOUND',
-        message: 'RPC rate limit, đang chờ thử lại...',
+        error: 'RATE_LIMITED',
+        message: 'RPC rate limit, paymentWatcher sẽ tự động backoff.',
       };
     }
 

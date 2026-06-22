@@ -117,11 +117,35 @@ const getAllOrders = async () => {
   }
 };
 
+/**
+ * Lấy danh sách các đơn hàng đang chờ thanh toán (status = 'pending') và chưa hết hạn
+ * Dùng bởi paymentWatcher để tự động đối soát định kỳ
+ * @returns {Promise<Array>} Danh sách đơn hàng pending chưa hết hạn
+ */
+const getPendingOrders = async () => {
+  const queryText = `
+    SELECT * FROM orders
+    WHERE status = 'pending'
+      AND expires_at > NOW()
+    ORDER BY created_at ASC;
+  `;
+
+  try {
+    const res = await db.query(queryText);
+    return res.rows;
+  } catch (error) {
+    console.error('Lỗi trong getPendingOrders:', error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   createOrder,
   getOrderById,
   getOrderByReference,
   updateOrderStatus,
-  getAllOrders
+  getAllOrders,
+  getPendingOrders,
 };
+
 

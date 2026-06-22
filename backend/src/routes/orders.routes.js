@@ -133,8 +133,8 @@ router.get('/:id/check-payment', async (req, res) => {
     const verification = await verifyPayment(order.reference, order.amount, order.seller_wallet);
 
     if (!verification.success) {
-      // Chưa có giao dịch → 202 Accepted (đang chờ, tiếp tục poll)
-      if (verification.error === 'PAYMENT_NOT_FOUND') {
+      // Chưa có giao dịch hoặc RPC đang bị rate limit → 202 Accepted (tiếp tục chờ)
+      if (verification.error === 'PAYMENT_NOT_FOUND' || verification.error === 'RATE_LIMITED') {
         return res.status(202).json({
           success: false,
           error: verification.error,
