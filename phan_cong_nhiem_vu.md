@@ -1,13 +1,39 @@
-# 📋 Phân công nhiệm vụ FULL VERSION (ShopTalk)
+# 📋 Phân công nhiệm vụ
 
-## 🟢 Nguyên tắc chung: "Làm việc trên đảo độc lập"
+## 🟢 Nguyên tắc chung: 
 *   Mỗi người làm trên folder riêng đã phân chia.
 *   **Mock Data:** Nếu cần dữ liệu từ người khác chưa xong → tự tạo hardcode để chạy trước.
-*   **Điểm kết nối duy nhất:** Bảng `orders` trong DB và cấu trúc JSON đã chốt.
+*   **Điểm kết nối duy nhất:** Bảng `orders` trong DB và cấu trúc JSON đã chốt:
+
+    ### 1. Cấu trúc bảng `orders` (Database)
+    
+    | Tên cột | Kiểu dữ liệu | Mô tả |
+    | :--- | :--- | :--- |
+    | `id` | UUID (PRIMARY KEY) | Mã đơn hàng tự động tạo |
+    | `reference` | VARCHAR(255) (UNIQUE, NOT NULL) | Reference key cho Solana Pay |
+    | `product_name` | VARCHAR(255) (NOT NULL) | Tên sản phẩm |
+    | `amount` | DECIMAL(20, 6) (NOT NULL) | Số tiền USDC cần thanh toán |
+    | `seller_wallet` | VARCHAR(255) (NOT NULL) | Địa chỉ ví người bán |
+    | `status` | VARCHAR(50) (DEFAULT: 'pending', NOT NULL) | Trạng thái đơn hàng: 'pending', 'paid', 'expired', 'payment_mismatch' |
+    | `tx_signature` | VARCHAR(255) | Chữ ký giao dịch blockchain |
+    | `created_at` | TIMESTAMP WITH TIME ZONE | Thời gian tạo đơn hàng |
+    | `expires_at` | TIMESTAMP WITH TIME ZONE | Thời gian hết hạn (15 phút sau khi tạo) |
+    
+    ### 2. Định dạng JSON phản hồi từ Chat API (POST /api/ai/chat)
+    ```json
+    {
+      "success": true,
+      "sessionId": "UUID (dùng để giữ context multi-turn)",
+      "reply": "Nội dung tin nhắn từ AI",
+      "escalate": false, // hoặc true (cờ bật khi cần chuyển sang nhân viên thật)
+      "qrCodeImage": "base64 string của ảnh QR (nếu có), null nếu không",
+      "orderId": "UUID của đơn hàng (nếu được tạo), null nếu không"
+    }
+    ```
 
 ---
 
-## 👤 Thành viên A: AI & Agora Specialist (The Brain)
+## 👤 THẢO NGUYÊN: AI & Agora Specialist (The Brain)
 **Mục tiêu:** Xây dựng bộ não thông minh tư vấn sản phẩm, biết khi chốt đơn và tích hợp Agora.
 
 ### 🔧 Nhiệm vụ chi tiết:
@@ -43,7 +69,7 @@
 
 ---
 
-## 👤 Thành viên B: Blockchain & Reliability Engineer (The Bank)
+## 👤 THANH PHÚC: Blockchain & Reliability Engineer (The Bank)
 **Mục tiêu:** Đảm bảo tiền vào ví an toàn, chính xác, không gian lận.
 
 ### 🔧 Nhiệm vụ chi tiết:
@@ -82,7 +108,7 @@
 
 ---
 
-## 👤 Thành viên C: Frontend & Interaction Designer (The Face)
+## 👤 NGỌC HẬU: Frontend & Interaction Designer (The Face)
 **Mục tiêu:** Tạo trải nghiệm "Wow" cho khách và quản lý đơn hàng mượt cho chủ shop.
 
 ### 🔧 Nhiệm vụ chi tiết:
@@ -131,9 +157,9 @@
 
 | Thành viên | Tên nhánh | Mô tả |
 | :--- | :--- | :--- |
-| **A (The Brain)** | `feature/ai-agora` | Chứa tất cả code về AI, Agora, products.json |
-| **B (The Bank)** | `feature/blockchain-reliability` | Chứa code về verifyPayment, cronjob, idempotency |
-| **C (The Face)** | `feature/frontend-ui` | Chứa code về Frontend, Chat Widget, Dashboard |
+| **THẢO NGUYÊN (The Brain)** | `feature/ai-agora` | Chứa tất cả code về AI, Agora, products.json |
+| **THANH PHÚC (The Bank)** | `feature/blockchain-reliability` | Chứa code về verifyPayment, cronjob, idempotency |
+| **NGỌC HẬU (The Face)** | `feature/frontend-ui` | Chứa code về Frontend, Chat Widget, Dashboard |
 
 ### 2. Quy trình push code:
 ```bash
