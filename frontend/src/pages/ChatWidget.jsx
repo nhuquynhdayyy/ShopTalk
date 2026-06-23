@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AgoraRTC from 'agora-rtc-sdk-ng';
 import api from '../api';
 import QRDisplay from '../components/QRDisplay';
+import { io } from 'socket.io-client';
 
 function ChatWidget() {
   const [messages, setMessages] = useState([]);
@@ -10,7 +11,7 @@ function ChatWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [isEscalated, setIsEscalated] = useState(false);
-  
+
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isConnectingVoice, setIsConnectingVoice] = useState(false);
   const [language, setLanguage] = useState('vi');
@@ -43,17 +44,39 @@ function ChatWidget() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // Lắng nghe tín hiệu bắn mã QR từ Voice AI Proxy
+  useEffect(() => {
+    const socket = io(api.API_BASE_URL || 'http://localhost:5000', { transports: ['websocket', 'polling'] });
+
+    socket.on('show_qr_code', (data) => {
+      // Chỉ nhận QR code nếu đúng sessionId của tab này
+      if (data.sessionId === sessionStorage.getItem('shoptalk_session_id')) {
+        setMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Dạ vâng ạ, em đã lên đơn thành công và gửi mã QR thanh toán vào khung chat. Anh chị vui lòng kiểm tra và quét mã bằng ví Phantom nhé!',
+          qrCodeImage: data.qrCodeImage,
+          orderId: data.orderId,
+          productName: data.productName,
+          amount: data.amount
+        }]);
+      }
+    });
+
+    return () => socket.disconnect();
+  }, []);
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!inputValue.trim() || isLoading || isEscalated) return;
 
     const userText = inputValue;
     setInputValue('');
-    
+
     // Thêm tin nhắn của user vào danh sách hiển thị
     const userMsgId = crypto.randomUUID();
     setMessages(prev => [...prev, { id: userMsgId, role: 'user', content: userText }]);
-    
+
     setIsLoading(true);
 
     try {
@@ -63,9 +86,9 @@ function ChatWidget() {
       if (response.success) {
         // Thêm câu trả lời của AI
         const aiMsgId = crypto.randomUUID();
-        setMessages(prev => [...prev, { 
-          id: aiMsgId, 
-          role: 'assistant', 
+        setMessages(prev => [...prev, {
+          id: aiMsgId,
+          role: 'assistant',
           content: response.reply,
           qrCodeImage: response.qrCodeImage,
           orderId: response.orderId,
@@ -97,7 +120,7 @@ function ChatWidget() {
     try {
       const channelName = `voice_${sessionId}`;
       console.log(`[Voice] 🎤 Đang kết nối tới channel: ${channelName}`);
-      
+
       // Bước 1: Lấy token cho user
       const tokenData = await api.getAgoraToken(channelName, 1);
       console.log(`[Voice] 🔑 Đã nhận token từ backend`);
@@ -134,7 +157,7 @@ function ChatWidget() {
           if (mediaType === "audio") {
             console.log(`🔊 [Agora] Đang phát âm thanh từ user ${user.uid}...`);
             user.audioTrack.play();
-            
+
             if (user.uid === 999) {
               setMessages(prev => [...prev, {
                 id: crypto.randomUUID(),
@@ -173,7 +196,7 @@ function ChatWidget() {
       console.log(`[Voice] 🤖 Agent response:`, agentResponse);
 
       setIsVoiceMode(true);
-      
+
       // Thêm thông báo vào chat
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
@@ -191,7 +214,7 @@ function ChatWidget() {
         localAudioTrackRef.current = null;
       }
       if (rtcClientRef.current) {
-        try { await rtcClientRef.current.leave(); } catch (_) {}
+        try { await rtcClientRef.current.leave(); } catch (_) { }
         rtcClientRef.current = null;
       }
 
@@ -255,8 +278,8 @@ function ChatWidget() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <select 
-            value={language} 
+          <select
+            value={language}
             onChange={(e) => setLanguage(e.target.value)}
             disabled={isVoiceMode || isConnectingVoice}
             className="bg-[#0B0E14] text-xs text-[#8F9CAE] border border-[#243042] rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#5B3FE0]"
@@ -285,19 +308,18 @@ function ChatWidget() {
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div className="max-w-[85%] space-y-2">
-                <div 
-                  className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                    msg.role === 'user'
+                <div
+                  className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
                       ? 'bg-[#5B3FE0] text-white rounded-tr-none'
                       : 'bg-[#1C2533] text-[#F0F2F5] rounded-tl-none border border-[#243042]'
-                  }`}
+                    }`}
                 >
                   {msg.content}
                 </div>
 
                 {/* Hiển thị QR Code nếu có */}
                 {msg.role === 'assistant' && msg.qrCodeImage && (
-                  <QRDisplay 
+                  <QRDisplay
                     qrCodeImage={msg.qrCodeImage}
                     amount={msg.amount || 0.1}
                     productName={msg.productName || "Solana Mobile Saga v2"}
@@ -322,7 +344,7 @@ function ChatWidget() {
 
         {/* Escalation Overlay Warning */}
         {isEscalated && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center max-w-md mx-auto"

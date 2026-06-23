@@ -1,6 +1,6 @@
 const { Keypair } = require('@solana/web3.js');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
-const { checkInventory, normalize } = require('./inventory.service');
+const { checkInventory, normalize, getProducts } = require('./inventory.service');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
 const { getIo } = require('../websocket/socket.server');
@@ -549,9 +549,18 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
   const isEnglish = language === 'en';
   const asrLanguage = isEnglish ? "en-US" : "vi-VN";
   const ttsVoice = isEnglish ? "en-US-AriaNeural" : "vi-VN-HoaiMyNeural";
+  // Lấy danh sách sản phẩm thực tế để nhúng vào Prompt cho Voice AI (Prompt Injection)
+  const products = getProducts();
+  const productListStr = products.map(p => `- ${p.name}: ${p.price_usdc} USDC`).join("\n");
+
   const systemPrompt = isEnglish
-    ? "You are a sales assistant. Be brief and helpful."
-    : "Bạn là nhân viên bán hàng. Nói ngắn gọn, hữu ích.";
+    ? `You are a sales assistant for ShopTalk. Be brief and helpful. We ONLY sell these products:\n${productListStr}\nWHEN THE USER BUYS: Call the \`create_order\` tool immediately with the product name and price. You don't need to ask for their name or address.`
+    : `Bạn là nhân viên bán hàng của ShopTalk. Trả lời ngắn gọn, vui vẻ, tự nhiên như người thật.
+Tuyệt đối KHÔNG tự bịa sản phẩm. Cửa hàng HIỆN CHỈ CÓ các sản phẩm sau:
+${productListStr}
+
+Nếu khách hỏi giá hoặc cần mua, hãy tư vấn dựa trên danh sách trên. 
+KHI KHÁCH CHỐT MUA: Bạn HÃY NGAY LẬP TỨC GỌI TOOL \`create_order\` để tạo đơn hàng. Bạn không cần phải hỏi tên hay địa chỉ của khách nếu khách không cung cấp. Hệ thống sẽ tự động sinh mã QR.`;
 
   // Tạo Token cho Agent
   const tokenData = generateAgoraToken(channelName, agentUid);
@@ -582,25 +591,25 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
         })
       },
       llm: {
-        url: "https://api.groq.com/openai/v1/chat/completions",
+        url: `${webhookUrl}/agora/llm-proxy?sessionId=${sessionId || 'default'}`,
         api_key: groqApiKey,
         system_messages: [{ role: "system", content: systemPrompt }],
         params: { model: "llama-3.1-8b-instant", max_tokens: 300 }
       },
       tts: {
         vendor: process.env.ELEVENLABS_API_KEY ? "elevenlabs" : "microsoft",
-        params: process.env.ELEVENLABS_API_KEY 
+        params: process.env.ELEVENLABS_API_KEY
           ? {
-              voice_id: "EXAVITQu4vr4xnSDxMaL", // Giọng nữ Sarah (Free Premade)
-              key: process.env.ELEVENLABS_API_KEY
-            }
-          : { 
-              voice_name: ttsVoice,
-              ...(process.env.AZURE_SPEECH_KEY && {
-                key: process.env.AZURE_SPEECH_KEY,
-                region: process.env.AZURE_SPEECH_REGION || "southeastasia"
-              })
-            }
+            voice_id: "EXAVITQu4vr4xnSDxMaL", // Giọng nữ Sarah (Free Premade)
+            key: process.env.ELEVENLABS_API_KEY
+          }
+          : {
+            voice_name: ttsVoice,
+            ...(process.env.AZURE_SPEECH_KEY && {
+              key: process.env.AZURE_SPEECH_KEY,
+              region: process.env.AZURE_SPEECH_REGION || "southeastasia"
+            })
+          }
       }
     }
   };
@@ -811,5 +820,6 @@ module.exports = {
   generateAgoraToken,
   startAgoraAgent,
   createMockOrder,
-  executeTool
+  executeTool,
+  OPENAI_TOOLS
 };
