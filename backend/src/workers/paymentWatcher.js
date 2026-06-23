@@ -10,7 +10,7 @@
  */
 
 const { getPendingOrders, updateOrderStatus } = require('../models/order.model');
-const { verifyPayment } = require('../services/solanaPay.service');
+const { verifyPayment } = require('../services/verify.service');
 
 // ─── Cấu hình ───────────────────────────────────────────────────────────────
 
@@ -66,6 +66,11 @@ const runOnePoll = async () => {
           // ✅ Thanh toán thành công — cập nhật DB ngay lập tức
           await updateOrderStatus(order.id, 'paid', result.signature);
           logSuccess(order.id, result.signature);
+        } else if (result.error === 'PAYMENT_MISMATCH') {
+          await updateOrderStatus(order.id, 'payment_mismatch', result.signature || null);
+          console.warn(
+            `[Watcher] PAYMENT_MISMATCH order #${order.id}: expected ${result.expectedAmount}, received ${result.receivedAmount}, signature ${result.signature || 'unknown'}`
+          );
         } else if (result.error === 'PAYMENT_NOT_FOUND') {
           // Chưa có thanh toán — bỏ qua, tiếp tục đơn hàng kế tiếp
         } else if (result.error === 'RATE_LIMITED') {
@@ -156,4 +161,4 @@ const stopPaymentWatcher = () => {
   }
 };
 
-module.exports = { startPaymentWatcher, stopPaymentWatcher };
+module.exports = { startPaymentWatcher, stopPaymentWatcher, runOnePoll };

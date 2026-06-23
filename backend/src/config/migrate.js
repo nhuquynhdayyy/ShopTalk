@@ -24,6 +24,10 @@ async function runMigration() {
       expires_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '15 minutes'),
       CONSTRAINT chk_status CHECK (status IN ('pending', 'paid', 'expired', 'payment_mismatch'))
     );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_tx_signature_unique
+      ON orders (tx_signature)
+      WHERE tx_signature IS NOT NULL;
   `;
 
   try {
