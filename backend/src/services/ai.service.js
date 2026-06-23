@@ -1,5 +1,6 @@
 const { Keypair } = require('@solana/web3.js');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
+const axios = require('axios');
 const { checkInventory } = require('./inventory.service');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
@@ -532,7 +533,7 @@ const generateAgoraToken = (channelName, uid) => {
     appId,
     appCertificate,
     channelName,
-    Number(uid) || 0,
+    Number(uid),
     role,
     privilegeExpiredTs
   );
@@ -549,50 +550,74 @@ const startAgoraAgent = async (channelName, agentUid = 999) => {
   const appId = process.env.AGORA_APP_ID;
   const customerId = process.env.AGORA_CUSTOMER_ID;
   const customerSecret = process.env.AGORA_CUSTOMER_SECRET;
+  const groqApiKey = process.env.GROQ_API_KEY;
 
   if (!appId || !customerId || !customerSecret) {
-    console.warn('[Agora] ⚠️ Thiếu thông tin xác thực Agora REST API trong .env. Bỏ qua gọi API thực tế.');
+    console.error('[Agora] ❌ Thiếu thông tin cấu hình trong .env (AGORA_APP_ID, AGORA_CUSTOMER_ID, AGORA_CUSTOMER_SECRET)');
+    return { success: false, message: 'Thiếu cấu hình Agora' };
+  }
+
+  // Kiểm tra BACKEND_PUBLIC_URL — Agora cần URL công khai để gọi webhook LLM
+  const backendPublicUrl = process.env.BACKEND_PUBLIC_URL;
+  if (!backendPublicUrl || backendPublicUrl.includes('localhost')) {
+    console.error('[Agora] ❌ BACKEND_PUBLIC_URL chưa được cấu hình hoặc vẫn là localhost.');
+    console.error('[Agora] ➡️  Hãy chạy: ngrok http 3000');
+    console.error('[Agora] ➡️  Sau đó cập nhật BACKEND_PUBLIC_URL=https://xxxx.ngrok-free.app trong .env');
     return {
       success: false,
-      message: 'Thiếu credentials Agora để gọi API thực tế. Hãy điền AGORA_CUSTOMER_ID và AGORA_CUSTOMER_SECRET.'
+      message: 'BACKEND_PUBLIC_URL chưa được cấu hình. Agora cần URL công khai để gọi callback LLM. Hãy dùng ngrok: ngrok http 3000'
     };
   }
 
   // 1. Tạo Token cho Agent tham gia
-  const token = generateAgoraToken(channelName, agentUid);
+  const token = generateAgoraToken(channelName, 999);
+  const authHeader = 'Basic ' + Buffer.from(customerId + ':' + customerSecret).toString('base64');
 
-  // 2. Encode Basic Auth credentials
-  const authHeader = 'Basic ' + Buffer.from(`${customerId}:${customerSecret}`).toString('base64');
+  // Log an toàn
+  const maskedId = customerId.slice(0, 4) + '...' + customerId.slice(-4);
+  const maskedSecret = customerSecret.slice(0, 4) + '...' + customerSecret.slice(-4);
+  console.log(`[Agora API] Auth: CustomerId=${maskedId}, Secret=${maskedSecret}`);
+
+  // 2. LLM Webhook URL — Agora sẽ gọi về đây để lấy phản hồi AI
+  const llmWebhookUrl = `${backendPublicUrl.replace(/\/$/, '')}/api/agora/llm-webhook`;
+  console.log('[Check] Webhook URL gửi đi:', llmWebhookUrl);
+
+  // v2 API endpoint — dùng agent_id top-level, để Dashboard Custom Config xử lý llm/asr/tts
+  const apiUrl = `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`;
+
+  // Cấu trúc body tối giản nhưng đầy đủ 'Vendor'
+  const body = {
+    agent_id: process.env.AGORA_AGENT_ID,
+    properties: {
+      channel: channelName,
+      token: token,
+      agent_rtc_uid: "999",
+      remote_rtc_uids: ["*"],
+      // Phải có định danh vendor dù dùng cấu hình Dashboard
+      asr: { vendor: "ares" },
+      tts: { vendor: "openai" }, 
+      llm: { vendor: "openai" } 
+    }
+  };
+
+  console.log('[Check] UID in Token: 999 | Channel:', channelName);
+  console.log(`[Agora API] POST ${apiUrl}`);
+  console.log(`[Agora API] Body (agent_id: ${body.agent_id}):`, JSON.stringify(body, null, 2));
 
   try {
     console.log(`[Agora] 📡 Gửi request start agent join channel "${channelName}"...`);
-    const resp = await fetch(`https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`, {
-      method: 'POST',
+    const response = await axios.post(apiUrl, body, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': authHeader
-      },
-      body: JSON.stringify({
-        properties: {
-          channel: channelName,
-          token: token,
-          agent_rtc_uid: String(agentUid),
-          remote_rtc_uids: ["*"] // Lắng nghe toàn bộ user trong kênh
-        }
-      })
+      }
     });
-
-    const result = await resp.json();
-    return {
-      success: resp.ok,
-      data: result
-    };
+    console.log(`[Agora] 🚀 Mời AI Agent thành công! Response:`, JSON.stringify(response.data));
+    return { success: true, data: response.data };
   } catch (error) {
-    console.error('[Agora] ❌ Lỗi kết nối tới Agora Conversational AI Engine:', error.message);
-    return {
-      success: false,
-      message: error.message
-    };
+    const errorMsg = error.response ? JSON.stringify(error.response.data) : error.message;
+    console.error('[Agora] ❌ Lỗi gọi API Join:', errorMsg);
+    return { success: false, message: errorMsg };
   }
 };
 

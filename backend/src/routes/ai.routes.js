@@ -49,41 +49,11 @@ router.post('/chat', async (req, res) => {
 });
 
 /**
- * Route: POST /agora/token
- * Mô tả: Sinh Agora RTC Token phục vụ kết nối voice channel (cho client hoặc agent).
- * Body: { channelName, uid }
- */
-router.post('/agora/token', (req, res) => {
-  try {
-    const { channelName, uid } = req.body;
-
-    if (!channelName) {
-      return res.status(400).json({
-        success: false,
-        error: 'Thiếu tên kênh (channelName)'
-      });
-    }
-
-    const token = generateAgoraToken(channelName, uid || 0);
-    return res.status(200).json({
-      success: true,
-      token
-    });
-  } catch (error) {
-    console.error('Lỗi khi sinh Agora token:', error.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Lỗi hệ thống khi sinh Agora Token'
-    });
-  }
-});
-
-/**
- * Route: POST /agora/start-agent
- * Mô tả: Mời Agora Conversational AI Agent tham gia vào kênh voice RTC tương ứng.
+ * Route: POST /start-agent  → resolves to POST /api/ai/start-agent
+ * Mô tả: Mời Agora Conversational AI Agent tham gia vào kênh voice RTC.
  * Body: { channelName, agentUid }
  */
-router.post('/agora/start-agent', async (req, res) => {
+router.post('/start-agent', async (req, res) => {
   try {
     const { channelName, agentUid } = req.body;
 
@@ -94,15 +64,18 @@ router.post('/agora/start-agent', async (req, res) => {
       });
     }
 
+    console.log(`[Backend AI Route] Đang mời AI Agent tham gia kênh: ${channelName}, agentUid: ${agentUid || 999}`);
     const result = await startAgoraAgent(channelName, agentUid || 999);
     
     if (!result.success) {
+      console.error(`[Backend AI Route] Mời AI Agent thất bại: ${result.message}`);
       return res.status(500).json({
         success: false,
         message: result.message
       });
     }
 
+    console.log(`[Backend AI Route] AI Agent đã được mời thành công vào kênh: ${channelName}`);
     return res.status(200).json({
       success: true,
       message: 'Đã gửi yêu cầu kích hoạt AI Agent tham gia kênh thành công.',

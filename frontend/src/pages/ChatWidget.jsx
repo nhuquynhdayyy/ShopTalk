@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import api from '../api';
 import QRModal from '../components/QRModal';
+import { useAgoraVoice } from '../hooks/useAgoraVoice';
 
 const mockMessages = [
   {
@@ -289,6 +290,9 @@ function ChatWidget() {
   const [qrPayload, setQrPayload] = useState(null);
   const chatEndRef = useRef(null);
 
+  // ── Voice call via Agora ──────────────────────────────────────────────────
+  const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute } = useAgoraVoice(sessionId);
+
   useEffect(() => {
     let savedSessionId = sessionStorage.getItem('shoptalk_session_id');
 
@@ -462,13 +466,46 @@ function ChatWidget() {
               ))}
             </div>
 
-            <form onSubmit={handleSend} className="flex gap-3">
+            <form onSubmit={handleSend} className="flex gap-2">
               <input
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value)}
                 placeholder="Nhập câu hỏi hoặc yêu cầu mua hàng..."
                 className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
               />
+
+              {/* ── Nút gọi thoại ───────────────────────────── */}
+              <button
+                type="button"
+                title={isInCall ? (isMuted ? 'Bỏ tắt mic' : 'Tắt mic') : 'Gọi thoại AI'}
+                onClick={isInCall ? (isMuted ? toggleMute : toggleMute) : joinChannel}
+                disabled={connectionState === 'CONNECTING'}
+                className={[
+                  'h-11 w-11 flex-shrink-0 rounded-lg text-lg font-bold transition-all',
+                  connectionState === 'CONNECTING'
+                    ? 'cursor-not-allowed bg-slate-200 text-slate-400 animate-pulse'
+                    : isInCall && !isMuted
+                    ? 'bg-red-500 text-white shadow-lg shadow-red-200 hover:bg-red-600'
+                    : isInCall && isMuted
+                    ? 'bg-amber-400 text-white hover:bg-amber-500'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:border-teal-400 hover:text-teal-600'
+                ].join(' ')}
+              >
+                {connectionState === 'CONNECTING' ? '⏳' : isInCall ? (isMuted ? '🔇' : '🎙️') : '📞'}
+              </button>
+
+              {/* Nút kết thúc cuộc gọi — chỉ hiện khi đang gọi */}
+              {isInCall && (
+                <button
+                  type="button"
+                  title="Kết thúc cuộc gọi"
+                  onClick={leaveChannel}
+                  className="h-11 w-11 flex-shrink-0 rounded-lg bg-slate-800 text-lg text-white transition hover:bg-slate-900"
+                >
+                  ✖
+                </button>
+              )}
+
               <button
                 type="submit"
                 disabled={!inputValue.trim() || isTyping}
@@ -491,5 +528,4 @@ function ChatWidget() {
   );
 }
 
-export { mockMessages };
 export default ChatWidget;
