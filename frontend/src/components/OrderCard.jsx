@@ -1,93 +1,101 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import StatusBadge from './StatusBadge';
+
+const formatDate = (dateString) => {
+  if (!dateString) return 'Không rõ thời gian';
+
+  try {
+    return new Intl.DateTimeFormat('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit'
+    }).format(new Date(dateString));
+  } catch (_) {
+    return dateString;
+  }
+};
+
+const shorten = (value, head = 7, tail = 5) => {
+  if (!value || value.length <= head + tail) return value || 'N/A';
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
+};
 
 function OrderCard({ order, onOfframp }) {
-  const getStatusBadgeClass = (status) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
-      case 'pending':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse';
-      case 'expired':
-        return 'bg-gray-500/10 text-gray-400 border-gray-500/30';
-      default:
-        return 'bg-red-500/10 text-red-400 border-red-500/30';
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'paid': return 'Đã thanh toán';
-      case 'pending': return 'Đang chờ';
-      case 'expired': return 'Đã hết hạn';
-      default: return status;
-    }
-  };
-
-  const formatDate = (dateString) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString('vi-VN');
-    } catch (_) {
-      return dateString;
-    }
-  };
+  const amount = Number(order.amount || 0);
 
   return (
-    <motion.div 
+    <motion.article
       layout
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.3 }}
-      className="bg-[#151B26] border border-[#243042] rounded-xl p-5 hover:border-[#5B3FE0]/50 transition-all shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4"
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.18 }}
+      className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal-300 hover:shadow-md"
     >
-      <div className="flex-1 space-y-2">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="font-mono text-xs text-gray-400">ID: {order.id.slice(0, 8)}...</span>
-          <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${getStatusBadgeClass(order.status)}`}>
-            {getStatusLabel(order.status)}
-          </span>
-          <span className="text-xs text-[#8F9CAE]">{formatDate(order.created_at)}</span>
-        </div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <StatusBadge status={order.status} />
+            <span className="text-xs font-medium text-slate-500">{formatDate(order.created_at)}</span>
+            {order.offramped && (
+              <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700">
+                Đã rút VND
+              </span>
+            )}
+          </div>
 
-        <h4 className="text-base font-semibold text-[#F0F2F5]">{order.product_name}</h4>
+          <h3 className="truncate text-base font-semibold text-slate-950">
+            {order.product_name || 'Đơn hàng ShopTalk'}
+          </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-xs text-[#8F9CAE] font-mono">
-          <div><span className="text-gray-500">Ví người bán:</span> {order.seller_wallet.slice(0, 6)}...{order.seller_wallet.slice(-6)}</div>
-          <div><span className="text-gray-500">Reference:</span> {order.reference.slice(0, 8)}...</div>
-          {order.tx_signature && (
-            <div className="md:col-span-2 text-emerald-400/90 truncate">
-              <span className="text-gray-500">Signature:</span> 
-              <a 
-                href={`https://explorer.solana.com/tx/${order.tx_signature}?cluster=devnet`} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="hover:underline ml-1"
-              >
-                {order.tx_signature.slice(0, 16)}...
-              </a>
+          <div className="mt-3 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+            <div>
+              <span className="font-semibold text-slate-700">Mã đơn:</span>{' '}
+              <span className="font-mono">{shorten(order.id)}</span>
             </div>
-          )}
+            <div>
+              <span className="font-semibold text-slate-700">Reference:</span>{' '}
+              <span className="font-mono">{shorten(order.reference)}</span>
+            </div>
+            <div className="md:col-span-2">
+              <span className="font-semibold text-slate-700">Ví nhận:</span>{' '}
+              <span className="font-mono">{shorten(order.seller_wallet, 8, 8)}</span>
+            </div>
+            {order.tx_signature && (
+              <div className="md:col-span-2">
+                <span className="font-semibold text-slate-700">Tx:</span>{' '}
+                <a
+                  href={`https://explorer.solana.com/tx/${order.tx_signature}?cluster=devnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-teal-700 underline-offset-2 hover:underline"
+                >
+                  {shorten(order.tx_signature, 12, 8)}
+                </a>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="flex items-center justify-between md:justify-end gap-4 min-w-[150px]">
-        <div className="text-right">
-          <p className="text-gray-400 text-xs">Số tiền</p>
-          <p className="text-lg font-bold text-[#14F195]">{order.amount} USDC</p>
-        </div>
+        <div className="flex items-center justify-between gap-4 lg:min-w-[230px] lg:justify-end">
+          <div className="text-left lg:text-right">
+            <p className="text-xs font-medium text-slate-500">Số tiền</p>
+            <p className="text-xl font-semibold text-slate-950">{amount.toFixed(2)} USDC</p>
+          </div>
 
-        {order.status === 'paid' && (
           <button
+            type="button"
             onClick={() => onOfframp(order)}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm rounded-lg transition-all shadow-md active:scale-95"
+            disabled={order.status !== 'paid'}
+            className="h-10 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
           >
-            💸 Rút về VND
+            Rút VND
           </button>
-        )}
+        </div>
       </div>
-    </motion.div>
+    </motion.article>
   );
 }
 

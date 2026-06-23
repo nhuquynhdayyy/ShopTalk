@@ -1,207 +1,370 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import api from '../api';
-import QRDisplay from '../components/QRDisplay';
+import QRModal from '../components/QRModal';
 
-function ChatWidget() {
-  const [messages, setMessages] = useState([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState(null);
-  const [isEscalated, setIsEscalated] = useState(false);
-  
-  const chatEndRef = useRef(null);
+const mockMessages = [
+  {
+    id: 'mock-welcome',
+    role: 'assistant',
+    content: 'Xin chào, mình là ShopTalk. Bạn có thể hỏi sản phẩm, so sánh lựa chọn hoặc nhắn "mua" để mình tạo mã thanh toán USDC.'
+  }
+];
 
-  // Khởi tạo session ID khi bắt đầu
-  useEffect(() => {
-    let savedSessionId = sessionStorage.getItem('shoptalk_session_id');
-    if (!savedSessionId) {
-      savedSessionId = crypto.randomUUID();
-      sessionStorage.setItem('shoptalk_session_id', savedSessionId);
-    }
-    setSessionId(savedSessionId);
+const suggestedPrompts = [
+  'Tư vấn áo thun bán chạy',
+  'Mình muốn mua tai nghe',
+  'Cho mình gặp chủ shop'
+];
 
-    // Chào mừng khách hàng
-    setMessages([
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: 'Xin chào anh/chị! Em là trợ lý ảo bán hàng của ShopTalk. Hôm nay anh/chị cần em hỗ trợ tư vấn sản phẩm hay đặt mua sản phẩm gì thế ạ? 😊'
-      }
-    ]);
-  }, []);
+const mockOrderDetailsById = new Map();
 
-  // Tự động cuộn xuống cuối khung chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+const generateId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!inputValue.trim() || isLoading || isEscalated) return;
+const createMockQrImage = () => {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">
+      <rect width="260" height="260" fill="white"/>
+      <g fill="#111827">
+        <rect x="20" y="20" width="58" height="58"/><rect x="31" y="31" width="36" height="36" fill="white"/><rect x="42" y="42" width="14" height="14"/>
+        <rect x="182" y="20" width="58" height="58"/><rect x="193" y="31" width="36" height="36" fill="white"/><rect x="204" y="42" width="14" height="14"/>
+        <rect x="20" y="182" width="58" height="58"/><rect x="31" y="193" width="36" height="36" fill="white"/><rect x="42" y="204" width="14" height="14"/>
+        <rect x="104" y="28" width="16" height="16"/><rect x="136" y="28" width="16" height="16"/><rect x="104" y="60" width="48" height="16"/>
+        <rect x="92" y="96" width="16" height="16"/><rect x="124" y="96" width="48" height="16"/><rect x="196" y="96" width="16" height="16"/>
+        <rect x="84" y="124" width="32" height="16"/><rect x="148" y="124" width="16" height="16"/><rect x="180" y="124" width="48" height="16"/>
+        <rect x="96" y="156" width="64" height="16"/><rect x="176" y="156" width="16" height="16"/><rect x="212" y="156" width="16" height="16"/>
+        <rect x="96" y="188" width="16" height="16"/><rect x="128" y="188" width="48" height="16"/><rect x="208" y="188" width="20" height="20"/>
+        <rect x="96" y="220" width="52" height="16"/><rect x="164" y="220" width="16" height="16"/><rect x="196" y="220" width="32" height="16"/>
+      </g>
+    </svg>
+  `;
 
-    const userText = inputValue;
-    setInputValue('');
-    
-    // Thêm tin nhắn của user vào danh sách hiển thị
-    const userMsgId = crypto.randomUUID();
-    setMessages(prev => [...prev, { id: userMsgId, role: 'user', content: userText }]);
-    
-    setIsLoading(true);
+  return `data:image/svg+xml;base64,${window.btoa(svg)}`;
+};
 
-    try {
-      // Gửi lên backend API /chat
-      const response = await api.sendChatMessage(userText, sessionId);
+const buildMockChatResponse = (message, sessionId) => {
+  const normalized = message.toLowerCase();
+  const wantsHuman = ['gặp', 'nhân viên', 'người thật', 'chủ shop', 'khiếu nại', 'support'].some((keyword) => (
+    normalized.includes(keyword)
+  ));
+  const wantsToBuy = ['mua', 'thanh toán', 'qr', 'chốt', 'đặt hàng', 'tai nghe'].some((keyword) => (
+    normalized.includes(keyword)
+  ));
 
-      if (response.success) {
-        // Thêm câu trả lời của AI
-        const aiMsgId = crypto.randomUUID();
-        setMessages(prev => [...prev, { 
-          id: aiMsgId, 
-          role: 'assistant', 
-          content: response.reply,
-          qrCodeImage: response.qrCodeImage,
-          orderId: response.orderId
-        }]);
+  if (wantsHuman) {
+    return {
+      success: true,
+      sessionId,
+      reply: 'Mình đã chuyển cuộc trò chuyện này cho nhân viên. Bạn giữ màn hình này mở, nhân viên sẽ tiếp nhận ngay.',
+      escalate: true,
+      qrCodeImage: null,
+      orderId: null
+    };
+  }
 
-        // Nếu nhận được cờ escalate
-        if (response.escalate) {
-          setIsEscalated(true);
-        }
-      } else {
-        throw new Error(response.error || 'Lỗi xử lý tin nhắn');
-      }
-    } catch (error) {
-      console.error('Lỗi khi chat:', error);
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: `⚠️ Có lỗi kết nối xảy ra: ${error.message}. Anh/chị vui lòng thử lại nhé.`
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
+  if (wantsToBuy) {
+    const orderId = generateId();
+    const order = {
+      id: orderId,
+      reference: 'mock-solana-pay-reference',
+      product_name: normalized.includes('tai nghe') ? 'Tai nghe Bluetooth ShopTalk' : 'Áo thun ShopTalk Essential',
+      amount: normalized.includes('tai nghe') ? 32 : 18,
+      seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    };
+
+    mockOrderDetailsById.set(orderId, order);
+
+    return {
+      success: true,
+      sessionId,
+      reply: `Mình đã tạo đơn ${order.product_name}. Tổng thanh toán là ${order.amount} USDC. Bạn quét mã QR vừa mở để thanh toán qua ví Solana nhé.`,
+      escalate: false,
+      qrCodeImage: createMockQrImage(),
+      orderId
+    };
+  }
+
+  return {
+    success: true,
+    sessionId,
+    reply: 'Mình gợi ý bắt đầu với áo thun ShopTalk Essential nếu bạn cần món dễ bán, hoặc tai nghe Bluetooth nếu khách của bạn thích phụ kiện công nghệ. Bạn muốn mình tạo đơn cho sản phẩm nào?',
+    escalate: false,
+    qrCodeImage: null,
+    orderId: null
   };
+};
 
-  const handleReset = () => {
-    const newSessionId = crypto.randomUUID();
-    sessionStorage.setItem('shoptalk_session_id', newSessionId);
-    setSessionId(newSessionId);
-    setIsEscalated(false);
-    setMessages([
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: 'Đã làm mới phiên hội thoại! Em là trợ lý bán hàng ShopTalk. Em có thể giúp gì cho anh/chị hôm nay ạ? 🛍️'
-      }
-    ]);
-  };
-
+function TypingIndicator() {
   return (
-    <div className="flex-1 flex flex-col max-w-3xl w-full mx-auto bg-[#151B26] border border-[#243042] rounded-2xl shadow-2xl overflow-hidden h-[calc(100vh-140px)]">
-      {/* Widget Header */}
-      <div className="bg-[#1C2533] px-6 py-4 border-b border-[#243042] flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 bg-green-500 rounded-full animate-ping"></div>
-          <div>
-            <h2 className="font-bold text-sm text-[#F0F2F5]">Trợ lý ảo ShopTalk</h2>
-            <p className="text-[10px] text-gray-400">Đang hoạt động định kỳ (Groq Llama 3.3)</p>
-          </div>
-        </div>
-        <button
-          onClick={handleReset}
-          className="text-xs text-[#8F9CAE] hover:text-[#5B3FE0] bg-[#0B0E14] hover:bg-[#243042] px-3 py-1.5 rounded-lg border border-[#243042] transition-colors"
-        >
-          🔄 Làm mới chat
-        </button>
+    <div className="flex justify-start">
+      <div className="flex items-center gap-1.5 rounded-lg rounded-bl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
       </div>
-
-      {/* Messages Scrollbox */}
-      <div className="flex-1 p-6 overflow-y-auto space-y-4">
-        <AnimatePresence>
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div className="max-w-[85%] space-y-2">
-                <div 
-                  className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                    msg.role === 'user'
-                      ? 'bg-[#5B3FE0] text-white rounded-tr-none'
-                      : 'bg-[#1C2533] text-[#F0F2F5] rounded-tl-none border border-[#243042]'
-                  }`}
-                >
-                  {msg.content}
-                </div>
-
-                {/* Hiển thị QR Code nếu có */}
-                {msg.role === 'assistant' && msg.qrCodeImage && (
-                  <QRDisplay 
-                    qrCodeImage={msg.qrCodeImage}
-                    amount={0.1} // Lấy từ DB hoặc mặc định
-                    productName="Solana Mobile Saga v2"
-                    orderId={msg.orderId}
-                  />
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {/* Loading / Typing Animation */}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-[#1C2533] border border-[#243042] px-4 py-3 rounded-2xl rounded-tl-none flex items-center gap-1.5">
-              <span className="w-2 h-2 bg-[#8F9CAE] rounded-full animate-bounce"></span>
-              <span className="w-2 h-2 bg-[#8F9CAE] rounded-full animate-bounce delay-75"></span>
-              <span className="w-2 h-2 bg-[#8F9CAE] rounded-full animate-bounce delay-150"></span>
-            </div>
-          </div>
-        )}
-
-        {/* Escalation Overlay Warning */}
-        {isEscalated && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center max-w-md mx-auto"
-          >
-            <p className="text-amber-400 text-xs font-semibold flex items-center justify-center gap-2">
-              🚨 Đã gửi tín hiệu chuyển cuộc hội thoại cho nhân viên hỗ trợ!
-            </p>
-            <p className="text-[#8F9CAE] text-[11px] mt-1">
-              Hội thoại với bot đã dừng. Quý khách vui lòng đợi trong giây lát.
-            </p>
-          </motion.div>
-        )}
-
-        <div ref={chatEndRef} />
-      </div>
-
-      {/* Message Input Box */}
-      <form onSubmit={handleSend} className="p-4 bg-[#1C2533] border-t border-[#243042] flex gap-3">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder={isEscalated ? "Cuộc trò chuyện đã được chuyển cho người thật..." : "Nhập tin nhắn tư vấn / mua hàng tại đây..."}
-          disabled={isEscalated}
-          className="flex-1 bg-[#0B0E14] border border-[#243042] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#5B3FE0] text-[#F0F2F5] disabled:opacity-50"
-        />
-        <button
-          type="submit"
-          disabled={!inputValue.trim() || isLoading || isEscalated}
-          className="bg-[#5B3FE0] hover:bg-[#4E34C8] disabled:bg-gray-700 text-white px-5 py-3 rounded-xl text-sm font-medium transition-all active:scale-95 disabled:scale-100 flex items-center justify-center gap-1.5"
-        >
-          Gửi 🚀
-        </button>
-      </form>
     </div>
   );
 }
 
+function ChatBubble({ message }) {
+  const isUser = message.role === 'user';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.18 }}
+      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+    >
+      <div
+        className={`max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm ${
+          isUser
+            ? 'rounded-br-sm bg-teal-600 text-white'
+            : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
+        }`}
+      >
+        {message.content}
+      </div>
+    </motion.div>
+  );
+}
+
+function StaffHandoff() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-lg border border-amber-200 bg-amber-50 p-4"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
+          NV
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-950">Nhân viên đang hỗ trợ</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Chào bạn, mình đã nhận được yêu cầu. Bạn chờ trong giây lát để shop tiếp tục cuộc trò chuyện nhé.
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function ChatWidget() {
+  const [messages, setMessages] = useState(mockMessages);
+  const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [sessionId, setSessionId] = useState('');
+  const [isEscalated, setIsEscalated] = useState(false);
+  const [isMockMode, setIsMockMode] = useState(false);
+  const [qrPayload, setQrPayload] = useState(null);
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    let savedSessionId = sessionStorage.getItem('shoptalk_session_id');
+
+    if (!savedSessionId) {
+      savedSessionId = generateId();
+      sessionStorage.setItem('shoptalk_session_id', savedSessionId);
+    }
+
+    setSessionId(savedSessionId);
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, isTyping, isEscalated]);
+
+  const subtitle = useMemo(() => (
+    isEscalated ? 'Đã chuyển sang nhân viên' : 'AI Sales Agent đang sẵn sàng'
+  ), [isEscalated]);
+
+  const resolveOrderSummary = async (orderId) => {
+    if (mockOrderDetailsById.has(orderId)) {
+      return mockOrderDetailsById.get(orderId);
+    }
+
+    if (!orderId) return null;
+
+    try {
+      const response = await api.getOrderById(orderId);
+      return response.data || null;
+    } catch (_) {
+      return {
+        id: orderId,
+        product_name: 'Đơn hàng ShopTalk',
+        amount: 0,
+        seller_wallet: ''
+      };
+    }
+  };
+
+  const handleSend = async (event) => {
+    event?.preventDefault();
+
+    const text = inputValue.trim();
+    if (!text || isTyping || isEscalated) return;
+
+    setInputValue('');
+    setMessages((current) => [
+      ...current,
+      { id: generateId(), role: 'user', content: text }
+    ]);
+    setIsTyping(true);
+
+    try {
+      let response;
+
+      try {
+        response = await api.sendChatMessage(text, sessionId);
+        if (!response.success) {
+          throw new Error(response.error || 'Chat API returned an unsuccessful response');
+        }
+        setIsMockMode(false);
+      } catch (_) {
+        response = buildMockChatResponse(text, sessionId || generateId());
+        setIsMockMode(true);
+      }
+
+      const nextSessionId = response.sessionId || sessionId;
+      if (nextSessionId) {
+        setSessionId(nextSessionId);
+        sessionStorage.setItem('shoptalk_session_id', nextSessionId);
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: generateId(),
+          role: 'assistant',
+          content: response.reply,
+          orderId: response.orderId,
+          qrCodeImage: response.qrCodeImage
+        }
+      ]);
+
+      if (response.escalate) {
+        setIsEscalated(true);
+      }
+
+      if (response.qrCodeImage) {
+        const order = await resolveOrderSummary(response.orderId);
+        setQrPayload({ qrCodeImage: response.qrCodeImage, order });
+      }
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handlePromptClick = (prompt) => {
+    setInputValue(prompt);
+  };
+
+  const handleReset = () => {
+    const nextSessionId = generateId();
+    sessionStorage.setItem('shoptalk_session_id', nextSessionId);
+    setSessionId(nextSessionId);
+    setMessages(mockMessages);
+    setIsEscalated(false);
+    setQrPayload(null);
+    setInputValue('');
+  };
+
+  return (
+    <>
+      <section className="mx-auto flex h-[calc(100vh-128px)] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-xl">
+        <header className="border-b border-slate-200 bg-white px-5 py-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-teal-600 text-sm font-semibold text-white">
+                ST
+              </div>
+              <div>
+                <h1 className="text-base font-semibold text-slate-950">ShopTalk Chat</h1>
+                <p className="text-sm text-slate-500">{subtitle}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isMockMode && (
+                <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                  Mock data
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleReset}
+                className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Làm mới
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          <AnimatePresence initial={false}>
+            {messages.map((message) => (
+              <ChatBubble key={message.id} message={message} />
+            ))}
+          </AnimatePresence>
+
+          {isTyping && <TypingIndicator />}
+          {isEscalated && <StaffHandoff />}
+          <div ref={chatEndRef} />
+        </div>
+
+        {!isEscalated && (
+          <div className="border-t border-slate-200 bg-white p-4">
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+              {suggestedPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => handlePromptClick(prompt)}
+                  className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-teal-300 hover:text-teal-700"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSend} className="flex gap-3">
+              <input
+                value={inputValue}
+                onChange={(event) => setInputValue(event.target.value)}
+                placeholder="Nhập câu hỏi hoặc yêu cầu mua hàng..."
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+              />
+              <button
+                type="submit"
+                disabled={!inputValue.trim() || isTyping}
+                className="h-11 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Gửi
+              </button>
+            </form>
+          </div>
+        )}
+      </section>
+
+      <QRModal
+        isOpen={Boolean(qrPayload)}
+        qrCodeImage={qrPayload?.qrCodeImage}
+        order={qrPayload?.order}
+        onClose={() => setQrPayload(null)}
+      />
+    </>
+  );
+}
+
+export { mockMessages };
 export default ChatWidget;
