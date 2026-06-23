@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Keypair } = require('@solana/web3.js');
 const { createOrder, getOrderById, getAllOrders, updateOrderStatus } = require('../models/order.model');
-const { verifyPayment } = require('../services/solanaPay.service');
+const { verifyPayment } = require('../services/verify.service');
 
 /**
  * Route: GET /orders
@@ -143,6 +143,16 @@ router.get('/:id/check-payment', async (req, res) => {
     }
 
     if (!verification.success) {
+      if (verification.error === 'PAYMENT_MISMATCH') {
+        const updatedOrder = await updateOrderStatus(id, 'payment_mismatch', verification.signature || null);
+        return res.status(409).json({
+          success: false,
+          error: verification.error,
+          message: verification.message,
+          data: updatedOrder
+        });
+      }
+
       // Chưa có giao dịch hoặc RPC đang bị rate limit → 202 Accepted (tiếp tục chờ)
       if (verification.error === 'PAYMENT_NOT_FOUND' || verification.error === 'RATE_LIMITED') {
         return res.status(202).json({
