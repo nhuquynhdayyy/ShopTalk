@@ -4,20 +4,90 @@
     "name": "Solana Mobile Saga Phone",
     "price_usdc": 0.1,
     "stock": 5,
-    "description": "Điện thoại Solana Saga thế hệ đầu tiên"
+    "description": "Điện thoại Solana Saga thế hệ đầu tiên, tích hợp ví Web3 phần cứng ngay trong máy, chạy Android tùy chỉnh."
   },
   {
     "id": "prod-2",
     "name": "Solana Mobile Saga v2",
     "price_usdc": 0.1,
     "stock": 10,
-    "description": "Điện thoại Solana Saga thế hệ thứ hai (giá test 0.1 USDC)"
+    "description": "Điện thoại Solana Saga thế hệ thứ hai (giá test 0.1 USDC). Màn hình AMOLED 6.67 inch, chip Snapdragon 8 Gen 2."
   },
   {
     "id": "prod-3",
     "name": "ShopTalk T-Shirt",
     "price_usdc": 0.1,
     "stock": 25,
-    "description": "Áo thun phong cách ShopTalk"
+    "description": "Áo thun phong cách ShopTalk, chất liệu cotton 100%, thoáng mát. Có size S, M, L, XL."
+  },
+  {
+    "id": "prod-4",
+    "name": "Ốp lưng Saga Phone trong suốt",
+    "price_usdc": 8.00,
+    "stock": 50,
+    "description": "Ốp lưng trong suốt chống sốc dành riêng cho Solana Mobile Saga. Chất liệu TPU cao cấp, bảo vệ 4 góc."
+  },
+  {
+    "id": "prod-5",
+    "name": "Cáp sạc USB-C 1m",
+    "price_usdc": 5.00,
+    "stock": 100,
+    "description": "Cáp sạc nhanh USB-C to USB-C, hỗ trợ PD 65W. Dây bọc dù siêu bền, dài 1 mét."
+  },
+  {
+    "id": "prod-6",
+    "name": "Củ sạc nhanh 65W GaN",
+    "price_usdc": 18.00,
+    "stock": 30,
+    "description": "Adapter sạc nhanh GaN 65W, nhỏ gọn hơn 40% so với sạc thường. Tương thích iPhone, Android, Laptop."
+  },
+  {
+    "id": "prod-7",
+    "name": "Tai nghe TWS Blockchain Edition",
+    "price_usdc": 35.00,
+    "stock": 20,
+    "description": "Tai nghe không dây True Wireless, chống ồn ANC, pin 28 giờ. Thiết kế đặc biệt phiên bản Blockchain Edition."
+  },
+  {
+    "id": "prod-8",
+    "name": "Mũ lưỡi trai ShopTalk",
+    "price_usdc": 12.00,
+    "stock": 40,
+    "description": "Mũ lưỡi trai (cap) thêu logo ShopTalk, chất liệu cotton twill cao cấp. Màu đen, có thể điều chỉnh size."
+  },
+  {
+    "id": "prod-9",
+    "name": "Áo hoodie Crypto Dev",
+    "price_usdc": 28.00,
+    "stock": 15,
+    "description": "Áo hoodie nỉ dày dặn in chữ \"Crypto Dev\" phong cách. Màu xám đậm, có túi kangaroo và mũ trùm."
+  },
+  {
+    "id": "prod-10",
+    "name": "Ledger Nano S Plus",
+    "price_usdc": 79.00,
+    "stock": 8,
+    "description": "Ví cứng (hardware wallet) Ledger Nano S Plus lưu trữ tài sản crypto an toàn offline. Hỗ trợ 5.500+ token."
+  },
+  {
+    "id": "prod-11",
+    "name": "Sticker Pack Web3",
+    "price_usdc": 3.00,
+    "stock": 200,
+    "description": "Bộ 20 sticker chủ đề Web3/Crypto: Solana, Bitcoin, Ethereum, NFT, DeFi. Chất liệu vinyl chống nước."
+  },
+  {
+    "id": "prod-12",
+    "name": "Balo Laptop Crypto",
+    "price_usdc": 45.00,
+    "stock": 12,
+    "description": "Balo đựng laptop 15.6 inch thiết kế chủ đề crypto. Chống thấm nước, có ngăn riêng cho ví cứng và cáp."
+  },
+  {
+    "id": "prod-13",
+    "name": "Phantom Wallet Keychain",
+    "price_usdc": 6.00,
+    "stock": 60,
+    "description": "Móc chìa khóa hình logo Phantom Wallet bằng kim loại zinc alloy cao cấp. Quà tặng ý nghĩa cho người yêu Solana."
   }
 ]

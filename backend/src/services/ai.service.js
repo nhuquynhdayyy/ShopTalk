@@ -3,6 +3,7 @@ const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const { checkInventory } = require('./inventory.service');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
+const { getIo } = require('../websocket/socket.server');
 
 // ─── Cấu hình Persona (System Prompt) ───────────────────────────────────────
 const SYSTEM_PROMPT = `Bạn là một nhân viên bán hàng (Sales Agent) chuyên nghiệp, niềm nở và thân thiện của cửa hàng "ShopTalk".
@@ -191,16 +192,116 @@ const checkEscalation = (text) => {
   const escalationKeywords = [
     'khiếu nại',
     'nói chuyện với người thật',
+    'lỗi sản phẩm',
+    'hoàn tiền',
     'nhân viên thật',
     'gặp người thật',
     'gặp nhân viên',
+    'gặp chủ shop',
     'chuyển sang người thật',
+    'nhân viên hỗ trợ',
+    'support',
+    'nói với người thật'
     'gặp chủ shop',
     'yêu cầu nhân viên',
     'gặp admin',
     'chat với người thật'
   ];
   return escalationKeywords.some(keyword => lowercaseText.includes(keyword));
+};
+
+/**
+ * Bắn sự kiện escalation_request tới Dashboard qua WebSocket (Socket.io)
+ * Khi khách yêu cầu gặp người thật, Dashboard sẽ nhận thông báo ngay lập tức
+ * @param {string} sessionId - ID phiên chat
+ * @param {string} userMessage - Tin nhắn cuối cùng của khách
+ */
+const emitEscalationEvent = (sessionId, userMessage) => {
+  try {
+    const io = getIo();
+    if (io) {
+      const payload = {
+        sessionId,
+        message: userMessage,
+        timestamp: new Date().toISOString()
+      };
+      io.emit('escalation_request', payload);
+      console.log(`[AI Agent] 🚨 Đã bắn sự kiện escalation_request cho sessionId: ${sessionId}`);
+    } else {
+      console.warn('[AI Agent] ⚠️ Socket.io chưa được khởi tạo, không thể bắn escalation event.');
+    }
+  } catch (err) {
+    console.error('[AI Agent] ❌ Lỗi khi bắn escalation event:', err.message);
+  }
+};
+
+// ─── Mock Order: Tạo đơn hàng giả hoàn toàn không cần DB/Blockchain ───────────
+
+/**
+ * Tạo một đơn hàng giả (mock) để demo chạy được khi không có DB hoặc Blockchain
+ * @param {string} productName - Tên sản phẩm
+ * @param {number} amount - Số tiền USDC
+ * @returns {Object} Thông tin đơn hàng giả bao gồm mock QR Code
+ */
+const createMockOrder = (productName = 'Solana Mobile Saga v2', amount = 0.1) => {
+  const mockOrderId = 'MOCK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const mockReference = 'REF-' + Math.random().toString(36).substring(2, 14).toUpperCase();
+
+  // Ảnh QR giả dạng SVG base64 — hiển thị được ngay trên browser
+  const mockQrSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+    <rect width="200" height="200" fill="white"/>
+    <rect x="10" y="10" width="60" height="60" fill="none" stroke="black" stroke-width="8"/>
+    <rect x="25" y="25" width="30" height="30" fill="black"/>
+    <rect x="130" y="10" width="60" height="60" fill="none" stroke="black" stroke-width="8"/>
+    <rect x="145" y="25" width="30" height="30" fill="black"/>
+    <rect x="10" y="130" width="60" height="60" fill="none" stroke="black" stroke-width="8"/>
+    <rect x="25" y="145" width="30" height="30" fill="black"/>
+    <rect x="85" y="10" width="10" height="10" fill="black"/>
+    <rect x="100" y="10" width="10" height="10" fill="black"/>
+    <rect x="85" y="25" width="10" height="10" fill="black"/>
+    <rect x="100" y="40" width="10" height="10" fill="black"/>
+    <rect x="115" y="25" width="10" height="10" fill="black"/>
+    <rect x="85" y="85" width="10" height="10" fill="black"/>
+    <rect x="100" y="70" width="10" height="10" fill="black"/>
+    <rect x="115" y="85" width="10" height="10" fill="black"/>
+    <rect x="130" y="85" width="10" height="10" fill="black"/>
+    <rect x="85" y="100" width="10" height="10" fill="black"/>
+    <rect x="115" y="100" width="10" height="10" fill="black"/>
+    <rect x="85" y="115" width="10" height="10" fill="black"/>
+    <rect x="100" y="115" width="10" height="10" fill="black"/>
+    <rect x="85" y="130" width="10" height="10" fill="black"/>
+    <rect x="115" y="130" width="10" height="10" fill="black"/>
+    <rect x="130" y="115" width="10" height="10" fill="black"/>
+    <rect x="145" y="100" width="10" height="10" fill="black"/>
+    <rect x="160" y="100" width="10" height="10" fill="black"/>
+    <rect x="175" y="100" width="10" height="10" fill="black"/>
+    <rect x="145" y="115" width="10" height="10" fill="black"/>
+    <rect x="175" y="115" width="10" height="10" fill="black"/>
+    <rect x="145" y="130" width="10" height="10" fill="black"/>
+    <rect x="160" y="130" width="10" height="10" fill="black"/>
+    <rect x="175" y="130" width="10" height="10" fill="black"/>
+    <rect x="145" y="145" width="10" height="10" fill="black"/>
+    <rect x="160" y="160" width="10" height="10" fill="black"/>
+    <rect x="175" y="160" width="10" height="10" fill="black"/>
+    <rect x="145" y="175" width="10" height="10" fill="black"/>
+    <rect x="175" y="175" width="10" height="10" fill="black"/>
+    <text x="100" y="195" text-anchor="middle" font-size="8" fill="#888">DEMO QR</text>
+  </svg>`;
+
+  const mockQrBase64 = 'data:image/svg+xml;base64,' + Buffer.from(mockQrSvg).toString('base64');
+
+  console.log(`[AI Agent] 🎭 Tạo Mock Order: ${mockOrderId} | SP: ${productName} | ${amount} USDC`);
+
+  return {
+    id: mockOrderId,
+    reference: mockReference,
+    product_name: productName,
+    amount,
+    seller_wallet: process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
+    status: 'pending',
+    qr_code: mockQrBase64,
+    is_mock: true
+  };
 };
 
 // ─── Xử lý Hội thoại (Core Chat Engine) ───────────────────────────────────────
@@ -214,9 +315,11 @@ const checkEscalation = (text) => {
 const chat = async (sessionId, userMessage) => {
   // 1. Kiểm tra logic Escalation ngay trước khi gửi LLM
   if (checkEscalation(userMessage)) {
+    // Bắn WebSocket event tới Dashboard để nhân viên biết có khách cần hỗ trợ
+    emitEscalationEvent(sessionId, userMessage);
     return {
       success: true,
-      reply: "Dạ em xin lỗi vì sự bất tiện này. Em sẽ chuyển ngay cuộc trò chuyện này sang nhân viên hỗ trợ thực tế để xử lý nhanh nhất cho anh/chị ạ!",
+      reply: "Dạ em xin lỗi vì sự bất tiện này. Em sẽ chuyển ngay cuộc trò chuyện này sang nhân viên hỗ trợ thực tế để xử lý nhanh nhất cho anh/chị ạ! 🙏",
       escalate: true
     };
   }
@@ -465,23 +568,108 @@ const startAgoraAgent = async (channelName, agentUid = 999) => {
 };
 
 // ─── Sandbox / Mock Chat Flow cho Hackathon Demo khi không có API Key LLM ───
+/**
+ * Xử lý hội thoại demo hoàn toàn offline — không cần DB, Blockchain hay API Key.
+ * Dùng createMockOrder() để tạo đơn giả, trả về QR ảnh giả trông như thật.
+ */
 const mockChatFlow = async (sessionMessages, userMessage) => {
   const lowercaseMsg = userMessage.toLowerCase();
-  let reply = "";
+  let reply = '';
   let qrCodeImage = null;
   let orderId = null;
 
-  if (lowercaseMsg.includes('kho') || lowercaseMsg.includes('sản phẩm') || lowercaseMsg.includes('có gì') || lowercaseMsg.includes('bán gì')) {
-    reply = "Dạ bên em đang sẵn kho sản phẩm cực hot: **Solana Mobile Saga v2** với giá đặc biệt cho demo là **0.1 USDC** (đang còn 10 chiếc). Anh/chị có muốn đặt mua luôn không ạ?";
+// ─── Xem hàng / Danh sách sản phẩm ─────────────────────────────────────────
+  if (
+    lowercaseMsg.includes('kho') ||
+    lowercaseMsg.includes('san pham') ||
+    lowercaseMsg.includes('sản phẩm') ||
+    lowercaseMsg.includes('có gì') ||
+    lowercaseMsg.includes('co gi') ||
+    lowercaseMsg.includes('bán gì') ||
+    lowercaseMsg.includes('ban gi') ||
+    lowercaseMsg.includes('xem hàng') ||
+    lowercaseMsg.includes('danh sach')
+  ) {
+    reply = `Dạ bên em đang có các sản phẩm sau anh/chị ơi! 🛍️
+
+📱 **Điện thoại:**
+- Solana Mobile Saga Phone — **499.99 USDC** (còn 5 chiếc)
+- Solana Mobile Saga v2 — **0.1 USDC** (demo, còn 10 chiếc)
+
+📦 **Phụ kiện điện thoại:**
+- Ốp lưng Saga Phone trong suốt — **8 USDC**
+- Cáp sạc USB-C 1m — **5 USDC**
+- Củ sạc nhanh 65W GaN — **18 USDC**
+- Tai nghe TWS Blockchain Edition — **35 USDC**
+
+👕 **Thời trang:**
+- ShopTalk T-Shirt — **15 USDC**
+- Áo hoodie Crypto Dev — **28 USDC**
+- Mũ lưỡi trai ShopTalk — **12 USDC**
+
+🔐 **Phụ kiện Crypto:**
+- Ledger Nano S Plus — **79 USDC**
+- Phantom Wallet Keychain — **6 USDC**
+- Sticker Pack Web3 — **3 USDC**
+- Balo Laptop Crypto — **45 USDC**
+
+Anh/chị quan tâm sản phẩm nào ạ? 😊`;
   }
-  else if (lowercaseMsg.includes('mua') || lowercaseMsg.includes('đặt hàng') || lowercaseMsg.includes('saga')) {
-    // Tự động tạo đơn hàng mẫu cho demo
+
+  // ─── Mua hàng / Đặt đơn ─────────────────────────────────────────────────────
+  else if (
+    lowercaseMsg.includes('mua') ||
+    lowercaseMsg.includes('đặt hàng') ||
+    lowercaseMsg.includes('dat hang') ||
+    lowercaseMsg.includes('chốt') ||
+    lowercaseMsg.includes('chot') ||
+    lowercaseMsg.includes('order') ||
+    lowercaseMsg.includes('saga') ||
+    lowercaseMsg.includes('ao') ||
+    lowercaseMsg.includes('mu ') ||
+    lowercaseMsg.includes('ledger') ||
+    lowercaseMsg.includes('tai nghe') ||
+    lowercaseMsg.includes('op lung') ||
+    lowercaseMsg.includes('ốp lưng') ||
+    lowercaseMsg.includes('cap sac') ||
+    lowercaseMsg.includes('balo') ||
+    lowercaseMsg.includes('sticker')
+  ) {
+    // 1. Xác định sản phẩm và giá từ tin nhắn (Logic từ nhánh feature)
+    let productName = 'Solana Mobile Saga v2 (Demo)';
+    let amount = 0.1;
+
+    if (lowercaseMsg.includes('saga phone') || lowercaseMsg.includes('saga v1') || (lowercaseMsg.includes('saga') && !lowercaseMsg.includes('v2'))) {
+      productName = 'Solana Mobile Saga Phone'; amount = 499.99;
+    } else if (lowercaseMsg.includes('ledger')) {
+      productName = 'Ledger Nano S Plus'; amount = 79.00;
+    } else if (lowercaseMsg.includes('tai nghe')) {
+      productName = 'Tai nghe TWS Blockchain Edition'; amount = 35.00;
+    } else if (lowercaseMsg.includes('hoodie') || lowercaseMsg.includes('ao')) {
+      productName = 'Áo hoodie Crypto Dev'; amount = 28.00;
+    } else if (lowercaseMsg.includes('t-shirt') || lowercaseMsg.includes('tshirt')) {
+      productName = 'ShopTalk T-Shirt'; amount = 15.00;
+    } else if (lowercaseMsg.includes('mu') || lowercaseMsg.includes('mũ')) {
+      productName = 'Mũ lưỡi trai ShopTalk'; amount = 12.00;
+    } else if (lowercaseMsg.includes('balo')) {
+      productName = 'Balo Laptop Crypto'; amount = 45.00;
+    } else if (lowercaseMsg.includes('op lung') || lowercaseMsg.includes('ốp lưng')) {
+      productName = 'Ốp lưng Saga Phone trong suốt'; amount = 8.00;
+    } else if (lowercaseMsg.includes('cap sac') || lowercaseMsg.includes('cáp sạc')) {
+      productName = 'Cáp sạc USB-C 1m'; amount = 5.00;
+    } else if (lowercaseMsg.includes('sticker')) {
+      productName = 'Sticker Pack Web3'; amount = 3.00;
+    } else if (lowercaseMsg.includes('keychain') || lowercaseMsg.includes('phantom')) {
+      productName = 'Phantom Wallet Keychain'; amount = 6.00;
+    }
+
+    // 2. Thực hiện tạo đơn hàng vào DB (Logic từ nhánh main)
     try {
       const referenceKey = Keypair.generate().publicKey.toBase58();
       const newOrder = await createOrder({
         reference: referenceKey,
-        product_name: 'Solana Mobile Saga v2 (Mock)',
-        amount: 0.1,
+        product_name: productName,
+        amount: amount,
         seller_wallet: '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
         status: 'pending'
       });
@@ -496,16 +684,60 @@ const mockChatFlow = async (sessionMessages, userMessage) => {
 - **Số tiền**: ${newOrder.amount} USDC (Devnet)
 - **Mã đơn hàng**: \`${newOrder.id}\`
 
-Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng mở ví Phantom/Solflare (nhớ chọn mạng Devnet) quét mã này để chuyển tiền nhé!`;
+Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng dùng ví Phantom/Solflare quét mã này nhé!`;
     } catch (err) {
       reply = `Lỗi hệ thống khi tạo đơn hàng: ${err.message}`;
     }
   }
-  else if (lowercaseMsg.includes('thanh toán') || lowercaseMsg.includes('chuyển tiền')) {
-    reply = "Dạ anh/chị chỉ cần dùng ví Phantom hoặc Solflare trên điện thoại, quét mã QR mà em gửi ở trên, rồi ấn Xác nhận chuyển tiền là xong ạ. Giao dịch sẽ được cập nhật tự động sau vài giây trên blockchain Devnet.";
+
+    // Tạo mock order — không cần DB hay Blockchain
+    const mockOrder = createMockOrder(productName, amount);
+    orderId = mockOrder.id;
+    qrCodeImage = mockOrder.qr_code;
+
+    reply = `Dạ em đã tạo đơn hàng thành công cho anh/chị rồi ạ! 🎉
+
+- 📦 **Sản phẩm**: ${newOrder.product_name}
+- 💵 **Số tiền**: ${newOrder.amount} USDC (Devnet)
+- 🔖 **Mã đơn hàng**: \`${newOrder.id}\`
+
+📲 Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng mở ví **Phantom/Solflare** (nhớ chọn mạng **Devnet**) rồi quét mã này để hoàn tất thanh toán nhé!
+
+⏰ Mã QR có hiệu lực trong **15 phút**, nếu hết hạn anh/chị có thể nhắn lại để em tạo mới ạ.`;
+    } catch (err) {
+      reply = `Lỗi hệ thống khi tạo đơn hàng: ${err.message}`;
+    }
+  }
+
+  // ─── Hướng dẫn thanh toán ────────────────────────────────────────────────────
+  else if (
+    lowercaseMsg.includes('thanh toán') ||
+    lowercaseMsg.includes('thanh toan') ||
+    lowercaseMsg.includes('chuyển tiền') ||
+    lowercaseMsg.includes('chuyen tien') ||
+    lowercaseMsg.includes('qr') ||
+    lowercaseMsg.includes('phantom') ||
+    lowercaseMsg.includes('solflare')
+  ) {
+    reply = `Dạ để thanh toán anh/chị làm theo các bước sau nhé:
+
+1️⃣ Mở app **Phantom** hoặc **Solflare** trên điện thoại
+2️⃣ Chuyển sang mạng **Devnet** (vào Settings → Network → Devnet)
+3️⃣ Đảm bảo có **USDC Devnet** trong ví (lấy miễn phí tại faucet.solana.com)
+4️⃣ Quét mã QR em đã gửi ở trên
+5️⃣ Xác nhận giao dịch — tiền sẽ chuyển trong vài giây!
+
+Nếu anh/chị cần hỗ trợ thêm cứ nhắn em nhé 😊`;
   }
   else {
-    reply = "Dạ cửa hàng ShopTalk xin chào anh/chị! Em có thể giúp gì cho anh/chị hôm nay ạ? Bên em đang có điện thoại **Solana Mobile Saga v2** sẵn hàng đó ạ!";
+    reply = `Dạ cửa hàng **ShopTalk** xin chào anh/chị! 👋
+
+Em là trợ lý AI bán hàng tự động của ShopTalk. Em có thể giúp anh/chị:
+- 🔍 **Xem danh sách sản phẩm** (gõ: "xem hàng" hoặc "có gì bán")
+- 🛒 **Đặt hàng** (gõ tên sản phẩm + "mua")
+- 💳 **Hướng dẫn thanh toán** USDC qua Solana Pay
+
+Anh/chị cần em hỗ trợ gì ạ? 😊`;
   }
 
   sessionMessages.push({ role: 'assistant', content: reply });
@@ -522,5 +754,6 @@ Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng mở v
 module.exports = {
   chat,
   generateAgoraToken,
-  startAgoraAgent
+  startAgoraAgent,
+  createMockOrder
 };
