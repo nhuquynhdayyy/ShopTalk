@@ -8,6 +8,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const ordersRouter = require('./routes/orders.routes');
 const paymentRouter = require('./routes/payment.routes');
 const aiRouter = require('./routes/ai.routes');
+const agentToolsRouter = require('./routes/agent-tools.routes');
 const { startPaymentWatcher, stopPaymentWatcher } = require('./workers/paymentWatcher');
 
 const http = require('http');
@@ -27,6 +28,7 @@ app.use(express.json()); // Hỗ trợ đọc dữ liệu JSON gửi lên trong 
 app.use('/orders', ordersRouter);
 app.use('/payment', paymentRouter);
 app.use('/', aiRouter);
+app.use('/api', agentToolsRouter);
 
 // Endpoint mặc định kiểm tra trạng thái hoạt động của Server
 app.get('/', (req, res) => {

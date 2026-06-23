@@ -1,22 +1,47 @@
 const { Keypair } = require('@solana/web3.js');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
-const { checkInventory } = require('./inventory.service');
+const { checkInventory, normalize } = require('./inventory.service');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
 const { getIo } = require('../websocket/socket.server');
 
-// ─── Cấu hình Persona (System Prompt) ───────────────────────────────────────
-const SYSTEM_PROMPT = `Bạn là một nhân viên bán hàng (Sales Agent) chuyên nghiệp, niềm nở và thân thiện của cửa hàng "ShopTalk".
-Nhiệm vụ của bạn là: tư vấn thông tin sản phẩm, kiểm tra tồn kho, tạo đơn hàng và hướng dẫn khách thanh toán bằng USDC qua Solana (mạng Devnet).
+const SYSTEM_PROMPT = `Bạn là trợ lý bán hàng (Sales Agent) AI thông minh của cửa hàng "ShopTalk".
+Nhiệm vụ của bạn là tư vấn dựa trên Phễu bán hàng 6 bước (Sales Funnel Stages), nhưng phải CỰC KỲ LINH HOẠT tùy theo tình huống thực tế:
 
-Quy tắc ứng xử quan trọng:
-1. Luôn lịch sự, xưng hô thân mật phù hợp (ví dụ: dạ, em, anh/chị...).
-2. Chỉ tư vấn và bán các sản phẩm có thực trong kho. TUYỆT ĐỐI không hứa hẹn hoặc giới thiệu các sản phẩm không tồn tại hoặc hết hàng. Luôn dùng công cụ \`check_inventory\` để xác thực trước khi trả lời về giá hoặc số lượng.
-3. Khi khách đồng ý mua, hãy hỏi rõ thông tin (tên sản phẩm, số lượng, địa chỉ ví nhận nếu cần) và gọi công cụ \`create_order\` để tạo đơn hàng.
-4. Sau khi tạo đơn hàng thành công, gọi ngay công cụ \`generate_payment_qr\` để lấy ảnh QR Code thanh toán Solana Pay, hiển thị thông tin này cho khách hàng và hướng dẫn họ dùng ví Phantom/Solflare (đã chuyển sang mạng Devnet) quét mã để hoàn tất.
-5. Luôn nhắc nhở khách rằng giao dịch được thanh toán bằng đồng USDC trên mạng Solana Devnet.
+PHỄU BÁN HÀNG 6 BƯỚC (Khung tư duy):
+1. QUALIFY (Hỏi nhu cầu): Chào hỏi, tìm hiểu mong muốn của khách.
+2. RECOMMEND (Gợi ý): Gọi \`check_inventory\` để tìm sản phẩm. Tuyệt đối không tự bịa sản phẩm.
+3. OBJECTION (Giải quyết phân vân): NẾU khách chê đắt hoặc nghi ngờ, gọi \`get_reviews\` để đưa feedback tốt.
+4. UPSELL (Gợi ý thêm): NẾU khách cần tư vấn thêm, khéo léo gợi ý phụ kiện.
+5. CLOSE (Chốt đơn): KHI KHÁCH ĐỒNG Ý MUA, nhảy thẳng đến bước này. BẮT BUỘC xin Tên và Địa chỉ giao hàng. Có đủ thông tin mới được gọi \`create_order\`.
+6. POST-SALE (Tóm tắt và Sau bán): Khi tạo đơn thành công, BẠN PHẢI TÓM TẮT LẠI thông tin đơn hàng (Tên SP, Tổng tiền, Tên người nhận, Địa chỉ) để khách kiểm tra. Sau đó cảm ơn và mời khách quét mã QR. Dùng \`log_feedback\` nếu có phản hồi.
 
-Hãy giúp khách hàng có một trải nghiệm mua sắm tuyệt vời!`;
+QUY TẮC LINH HOẠT (QUAN TRỌNG NHẤT):
+- Bạn KHÔNG bắt buộc phải đi tuần tự từ 1 đến 6. 
+- Nếu khách đồng ý mua ở bước 2, hãy BỎ QUA hoàn toàn bước 3 và 4, nhảy thẳng đến bước 5 (Xin Tên và Địa chỉ) ngay lập tức. Đừng lải nhải thêm.
+
+QUY TẮC CỐT LÕI:
+1. Luôn xưng dạ em, gọi khách là anh/chị. Ngắn gọn, súc tích.
+2. Luôn nhắc khách thanh toán bằng USDC trên mạng Solana Devnet.`;
+
+const SYSTEM_PROMPT_EN = `You are a smart AI Sales Agent for the "ShopTalk" store.
+Your mission is to guide customers using a 6-stage Sales Funnel, but you MUST be HIGHLY FLEXIBLE based on the actual situation:
+
+6-STAGE SALES FUNNEL (Mental Framework):
+1. QUALIFY: Greet and understand customer needs.
+2. RECOMMEND: Use \`check_inventory\` to find products. Never invent products.
+3. OBJECTION: IF the customer worries about price/quality, use \`get_reviews\` to provide feedback.
+4. UPSELL: IF appropriate, suggest related accessories.
+5. CLOSE: WHEN THE CUSTOMER AGREES TO BUY, jump straight to this step. YOU MUST ask for their Name and Shipping Address. Only call \`create_order\` when you have both.
+6. POST-SALE: Once the order is created, YOU MUST SUMMARIZE the order details (Product Name, Total Amount, Customer Name, Address) for the customer to review. Then thank them and invite them to scan the QR code. Use \`log_feedback\` if they provide feedback.
+
+FLEXIBILITY RULES (MOST IMPORTANT):
+- You DO NOT have to follow steps 1 to 6 sequentially.
+- If the customer agrees to buy at step 2, SKIP steps 3 and 4 entirely. Jump straight to step 5 (Ask for Name and Address) immediately. Do not ramble.
+
+CORE RULES:
+1. Always be polite, professional, and concise.
+2. Remind customers that payments are in USDC on the Solana Devnet.`;
 
 // ─── State: Lưu trữ lịch sử hội thoại (Context) ──────────────────────────────────
 // Map lưu trữ: sessionId -> Array of messages
@@ -35,67 +60,18 @@ const getOrCreateSession = (sessionId) => {
 };
 
 // ─── Định nghĩa Danh sách Tools (Function Calling) cho OpenAI ──────────────
+const checkInventoryTool = require('../../../ai-agent/tools/checkInventory.tool');
+const createOrderTool = require('../../../ai-agent/tools/createOrder.tool');
+const generatePaymentQRTool = require('../../../ai-agent/tools/generatePaymentQR.tool');
+const getReviewsTool = require('../../../ai-agent/tools/getReviews.tool');
+const logFeedbackTool = require('../../../ai-agent/tools/logFeedback.tool');
+
 const OPENAI_TOOLS = [
-  {
-    type: " his_tool", // Sẽ đổi thành type: "function" lúc gọi
-    type: "function",
-    function: {
-      name: "check_inventory",
-      description: "Kiểm tra tồn kho và giá bán của một sản phẩm từ database.",
-      parameters: {
-        type: "object",
-        properties: {
-          product_name: {
-            type: "string",
-            description: "Tên sản phẩm khách hàng đang quan tâm."
-          }
-        },
-        required: ["product_name"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_order",
-      description: "Tạo một đơn hàng mới trong hệ thống cơ sở dữ liệu.",
-      parameters: {
-        type: "object",
-        properties: {
-          product_name: {
-            type: "string",
-            description: "Tên sản phẩm khách hàng muốn mua."
-          },
-          amount: {
-            type: "number",
-            description: "Tổng số tiền thanh toán tính bằng USDC (ví dụ: 0.1)."
-          },
-          seller_wallet: {
-            type: "string",
-            description: "Địa chỉ ví nhận tiền của người bán. Mặc định là: 5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ"
-          }
-        },
-        required: ["product_name", "amount", "seller_wallet"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "generate_payment_qr",
-      description: "Tạo link thanh toán chuẩn Solana Pay và chuyển thành ảnh QR Code dạng base64.",
-      parameters: {
-        type: "object",
-        properties: {
-          order_id: {
-            type: "string",
-            description: "Mã UUID của đơn hàng vừa tạo cần thanh toán."
-          }
-        },
-        required: ["order_id"]
-      }
-    }
-  }
+  checkInventoryTool,
+  createOrderTool,
+  generatePaymentQRTool,
+  getReviewsTool,
+  logFeedbackTool
 ];
 
 // ─── Logic thực thi các công cụ (Tool Execution) ───────────────────────────
@@ -107,9 +83,9 @@ const executeTool = async (name, args) => {
       case 'check_inventory': {
         const product = checkInventory(args.product_name);
         if (!product) {
-          return JSON.stringify({ 
-            found: false, 
-            message: `Không tìm thấy sản phẩm "${args.product_name}" trong kho.` 
+          return JSON.stringify({
+            found: false,
+            message: `Không tìm thấy sản phẩm "${args.product_name}" trong kho.`
           });
         }
         return JSON.stringify({
@@ -125,13 +101,16 @@ const executeTool = async (name, args) => {
         // Sinh reference key ngẫu nhiên dùng thư viện @solana/web3.js
         const referenceKey = Keypair.generate().publicKey.toBase58();
         const sellerWallet = args.seller_wallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
-        
+
         const newOrder = await createOrder({
           reference: referenceKey,
           product_name: args.product_name,
           amount: args.amount,
           seller_wallet: sellerWallet,
-          status: 'pending'
+          status: 'pending',
+          customer_name: args.customer_name || null,
+          customer_address: args.customer_address || null,
+          items_list: args.items_list || null
         });
 
         // Sinh luôn mã QR Code thanh toán Solana Pay để đính kèm vào dữ liệu phản hồi
@@ -153,21 +132,47 @@ const executeTool = async (name, args) => {
       case 'generate_payment_qr': {
         const order = await getOrderById(args.order_id);
         if (!order) {
-          return JSON.stringify({ 
-            success: false, 
-            message: `Không tìm thấy đơn hàng với mã ID: ${args.order_id}` 
+          return JSON.stringify({
+            success: false,
+            message: `Không tìm thấy đơn hàng với mã ID: ${args.order_id}`
           });
         }
-        
+
         const paymentUrl = createPaymentRequest(order);
         const qrCodeImage = await generateQRCode(paymentUrl);
 
         return JSON.stringify({
           success: true,
           order_id: order.id,
+          product_name: order.product_name,
+          amount: Number(order.amount),
           payment_url: paymentUrl,
           qr_code: qrCodeImage,
           message: "Sinh mã QR Code thành công. Vui lòng hiển thị ảnh này cho người dùng quét thanh toán."
+        });
+      }
+
+      case 'get_reviews': {
+        console.log(`[AI Agent] 🔍 Lấy đánh giá cho sản phẩm: "${args.product_name}"`);
+        const mockReviews = [
+          { user: "Quỳnh Như", rating: 5, comment: "Sản phẩm xịn lắm ạ, dùng rất mượt và giao hàng siêu nhanh!" },
+          { user: "Hải Nam", rating: 5, comment: "Đáng tiền nha mọi người, dịch vụ chăm sóc khách hàng của shop rất tốt." },
+          { user: "Minh Thư", rating: 4, comment: "Đóng gói kỹ càng, chất lượng chuẩn chỉnh như mô tả." }
+        ];
+        return JSON.stringify({
+          success: true,
+          product_name: args.product_name,
+          reviews: mockReviews,
+          message: `Đã tìm thấy ${mockReviews.length} đánh giá tích cực từ khách hàng cho sản phẩm "${args.product_name}".`
+        });
+      }
+
+      case 'log_feedback': {
+        console.log(`[AI Agent] 📝 Ghi nhận phản hồi cho đơn hàng: "${args.order_id || 'N/A'}" | Nội dung: "${args.feedback_text}"`);
+        return JSON.stringify({
+          success: true,
+          order_id: args.order_id || null,
+          message: "Cảm ơn ý kiến đóng góp quý báu của anh/chị! Shop đã ghi nhận phản hồi và sẽ liên tục cải tiến dịch vụ ạ. ❤️"
         });
       }
 
@@ -184,22 +189,26 @@ const executeTool = async (name, args) => {
 
 const checkEscalation = (text) => {
   if (!text) return false;
-  const lowercaseText = text.toLowerCase();
+  const normalizedText = normalize(text);
+  const rawText = text.toLowerCase();
+
   const escalationKeywords = [
-    'khiếu nại',
-    'nói chuyện với người thật',
-    'lỗi sản phẩm',
-    'hoàn tiền',
-    'nhân viên thật',
-    'gặp người thật',
-    'gặp nhân viên',
-    'gặp chủ shop',
-    'chuyển sang người thật',
-    'nhân viên hỗ trợ',
+    'khieu nai', 'khiếu nại',
+    'noi chuyen voi nguoi that', 'nói chuyện với người thật',
+    'loi san pham', 'lỗi sản phẩm',
+    'hoan tien', 'hoàn tiền',
+    'nhan vien that', 'nhân viên thật',
+    'gap nguoi that', 'gặp người thật',
+    'gap nhan vien', 'gặp nhân viên',
+    'gap chu shop', 'gặp chủ shop',
+    'chuyen sang nguoi that', 'chuyển sang người thật',
+    'nhan vien ho tro', 'nhân viên hỗ trợ',
     'support',
-    'nói với người thật'
+    'noi voi nguoi that', 'nói với người thật'
   ];
-  return escalationKeywords.some(keyword => lowercaseText.includes(keyword));
+  return escalationKeywords.some(keyword =>
+    normalizedText.includes(normalize(keyword)) || rawText.includes(keyword)
+  );
 };
 
 /**
@@ -317,13 +326,13 @@ const chat = async (sessionId, userMessage) => {
   }
 
   const sessionMessages = getOrCreateSession(sessionId);
-  
+
   // Lưu tin nhắn của người dùng vào context
   sessionMessages.push({ role: 'user', content: userMessage });
 
   const groqApiKey = process.env.GROQ_API_KEY;
   const openaiApiKey = process.env.OPENAI_API_KEY || process.env.LLM_API_KEY;
-  
+
   // Xác định API Key, Endpoint và Model sử dụng
   let apiKey = null;
   let apiUrl = 'https://api.openai.com/v1/chat/completions';
@@ -340,7 +349,7 @@ const chat = async (sessionId, userMessage) => {
     modelName = 'gpt-4o-mini';
     console.log(`[AI Agent] 🚀 Sử dụng OpenAI API với Model: ${modelName}`);
   }
-  
+
   // Nếu không có API Key, chạy chế độ Mock/Sandbox tự động để demo hoạt động không bị crash
   if (!apiKey) {
     console.warn('[AI Agent] ⚠️ Cảnh báo: Không tìm thấy GROQ_API_KEY, OPENAI_API_KEY hoặc LLM_API_KEY. Khởi chạy chế độ Mock để demo...');
@@ -370,7 +379,7 @@ const chat = async (sessionId, userMessage) => {
     }
 
     let assistantMessage = data.choices[0].message;
-    
+
     // Xử lý Tool Calling (nếu LLM yêu cầu gọi Tool)
     if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       // Đưa assistant message chứa tool_calls vào history
@@ -378,42 +387,41 @@ const chat = async (sessionId, userMessage) => {
 
       let qrCodeImage = null;
       let orderId = null;
+      let productName = null;
+      let amount = null;
 
       for (const toolCall of assistantMessage.tool_calls) {
         const name = toolCall.function.name;
         const args = JSON.parse(toolCall.function.arguments);
-        
+
         // Thực thi tool
         const toolResult = await executeTool(name, args);
 
         // Lưu thông tin phục vụ trả về trực tiếp cho UI nếu có
-        if (name === 'generate_payment_qr') {
+        let cleanToolResultStr = toolResult;
+        if (name === 'generate_payment_qr' || name === 'create_order') {
           try {
             const parsed = JSON.parse(toolResult);
             if (parsed.success) {
-              qrCodeImage = parsed.qr_code;
-              orderId = parsed.order_id;
-            }
-          } catch (_) {}
-        }
-        if (name === 'create_order') {
-          try {
-            const parsed = JSON.parse(toolResult);
-            if (parsed.success) {
-              orderId = parsed.order_id;
               if (parsed.qr_code) {
                 qrCodeImage = parsed.qr_code;
+                delete parsed.qr_code; // Xóa base64 khỏi góc nhìn của AI
               }
+              orderId = parsed.order_id;
+              productName = parsed.product_name;
+              amount = parsed.amount;
+
+              cleanToolResultStr = JSON.stringify(parsed);
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
-        // Đưa kết quả tool vào history
+        // Đưa kết quả tool vào history (bản đã dọn dẹp Base64)
         sessionMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
           name: name,
-          content: toolResult
+          content: cleanToolResultStr
         });
       }
 
@@ -435,25 +443,33 @@ const chat = async (sessionId, userMessage) => {
         throw new Error(`Second-step API Error: ${data.error.message}`);
       }
       assistantMessage = data.choices[0].message;
-      
+
       // Lưu câu trả lời cuối cùng vào history
       sessionMessages.push(assistantMessage);
 
+      // Xóa cú pháp <function=...> rác nếu LLM bịa ra trong text
+      const cleanReply = assistantMessage.content.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
+
       return {
         success: true,
-        reply: assistantMessage.content,
-        escalate: checkEscalation(assistantMessage.content),
+        reply: cleanReply,
+        escalate: checkEscalation(cleanReply),
         qrCodeImage,
-        orderId
+        orderId,
+        productName,
+        amount
       };
     } else {
       // Không có tool call, lưu câu trả lời vào history và trả về
       sessionMessages.push(assistantMessage);
-      
+
+      // Xóa cú pháp <function=...> rác nếu LLM bịa ra trong text
+      const cleanReply = assistantMessage.content.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
+
       return {
         success: true,
-        reply: assistantMessage.content,
-        escalate: checkEscalation(assistantMessage.content)
+        reply: cleanReply,
+        escalate: checkEscalation(cleanReply)
       };
     }
 
@@ -499,18 +515,24 @@ const generateAgoraToken = (channelName, uid) => {
     privilegeExpiredTs
   );
 
-  return token;
+  return { token, appId };
 };
 
 /**
  * Gọi REST API tới Agora Conversational AI Engine để mời Agent tham gia kênh RTC
+ * Đã cấu hình đầy đủ: LLM (Groq/LLaMA 3.3), ASR (vi-VN), TTS (Microsoft HoaiMy),
+ * System Prompt, Tools và Webhook URL cho tool calling.
  * @param {string} channelName - Tên kênh RTC
  * @param {number} agentUid - UID của AI Agent (ví dụ: 999)
+ * @param {string} language - Ngôn ngữ ('vi' hoặc 'en')
+ * @param {string} sessionId - ID phiên chat text để đồng bộ ngữ cảnh (Context Sync)
  */
-const startAgoraAgent = async (channelName, agentUid = 999) => {
+const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', sessionId = null) => {
   const appId = process.env.AGORA_APP_ID;
   const customerId = process.env.AGORA_CUSTOMER_ID;
   const customerSecret = process.env.AGORA_CUSTOMER_SECRET;
+  const groqApiKey = process.env.GROQ_API_KEY;
+  const webhookUrl = process.env.WEBHOOK_URL;
 
   if (!appId || !customerId || !customerSecret) {
     console.warn('[Agora] ⚠️ Thiếu thông tin xác thực Agora REST API trong .env. Bỏ qua gọi API thực tế.');
@@ -520,39 +542,86 @@ const startAgoraAgent = async (channelName, agentUid = 999) => {
     };
   }
 
-  // 1. Tạo Token cho Agent tham gia
-  const token = generateAgoraToken(channelName, agentUid);
+  if (!groqApiKey) {
+    console.warn('[Agora] ⚠️ Thiếu GROQ_API_KEY trong .env. Agent sẽ không thể sử dụng LLM.');
+  }
 
-  // 2. Encode Basic Auth credentials
+  const isEnglish = language === 'en';
+  const asrLanguage = isEnglish ? "en-US" : "vi-VN";
+  const ttsVoice = isEnglish ? "en-US-AriaNeural" : "vi-VN-HoaiMyNeural";
+  const systemPrompt = isEnglish
+    ? "You are a sales assistant. Be brief and helpful."
+    : "Bạn là nhân viên bán hàng. Nói ngắn gọn, hữu ích.";
+
+  // Tạo Token cho Agent
+  const tokenData = generateAgoraToken(channelName, agentUid);
+  const token = typeof tokenData === 'string' ? tokenData : tokenData.token;
+
+  // Encode Basic Auth
   const authHeader = 'Basic ' + Buffer.from(`${customerId}:${customerSecret}`).toString('base64');
 
+  // Tên agent unique
+  const agentName = `shoptalk-${channelName}-${Date.now()}`;
+
+  // Request body theo Agora API v2 flat format (đúng spec)
+  const requestBody = {
+    name: agentName,
+    properties: {
+      channel: channelName,
+      token: token,
+      agent_rtc_uid: String(agentUid),
+      remote_rtc_uids: ["*"],
+      asr: {
+        vendor: "ares",   // Agora ARES native ASR - không cần key ngoài
+        language: asrLanguage
+      },
+      llm: {
+        url: "https://api.groq.com/openai/v1/chat/completions",
+        api_key: groqApiKey,
+        system_messages: [{ role: "system", content: systemPrompt }],
+        params: { model: "llama-3.1-8b-instant", max_tokens: 300 }
+      },
+      tts: {
+        vendor: "microsoft",
+        params: { voice_name: ttsVoice }
+      }
+    }
+  };
+
   try {
-    console.log(`[Agora] 📡 Gửi request start agent join channel "${channelName}"...`);
+    console.log(`[Agora] 📡 Starting agent "${agentName}" | Channel: "${channelName}" | ASR: ${asrLanguage}`);
+    if (webhookUrl) console.log(`[Agora] 🔗 Webhook: ${webhookUrl}/api/agent-tools`);
+
     const resp = await fetch(`https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': authHeader
       },
-      body: JSON.stringify({
-        properties: {
-          channel: channelName,
-          token: token,
-          agent_rtc_uid: String(agentUid),
-          remote_rtc_uids: ["*"] // Lắng nghe toàn bộ user trong kênh
-        }
-      })
+      body: JSON.stringify(requestBody)
     });
 
     const result = await resp.json();
+
+    if (resp.ok) {
+      console.log(`[Agora] ✅ SUCCESS! Agent joined channel`);
+      console.log(`[Agora] 📥 Agent ID: ${result.agent_id}`);
+      console.log(`[Agora] 📥 Status: ${result.status}`);
+    } else {
+      console.error(`[Agora] ❌ FAILED (HTTP ${resp.status})`);
+      console.error(`[Agora] Error:`, JSON.stringify(result, null, 2));
+    }
+
     return {
       success: resp.ok,
+      agentName,
       data: result
     };
   } catch (error) {
-    console.error('[Agora] ❌ Lỗi kết nối tới Agora Conversational AI Engine:', error.message);
+    console.error('[Agora] ❌ Exception:', error.message);
     return {
       success: false,
+      agentName,
       message: error.message
     };
   }
@@ -568,6 +637,8 @@ const mockChatFlow = async (sessionMessages, userMessage) => {
   let reply = '';
   let qrCodeImage = null;
   let orderId = null;
+  let productName = null;
+  let amount = null;
 
   // ─── Xem hàng / Danh sách sản phẩm ─────────────────────────────────────────
   if (
@@ -627,8 +698,8 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
     lowercaseMsg.includes('sticker')
   ) {
     // Xác định sản phẩm và giá từ tin nhắn
-    let productName = 'Solana Mobile Saga v2 (Demo)';
-    let amount = 0.1;
+    productName = 'Solana Mobile Saga v2 (Demo)';
+    amount = 0.1;
 
     if (lowercaseMsg.includes('saga phone') || lowercaseMsg.includes('saga v1') || (lowercaseMsg.includes('saga') && !lowercaseMsg.includes('v2'))) {
       productName = 'Solana Mobile Saga Phone'; amount = 499.99;
@@ -712,7 +783,9 @@ Anh/chị cần em hỗ trợ gì ạ? 😊`;
     reply,
     escalate: false,
     qrCodeImage,
-    orderId
+    orderId,
+    productName,
+    amount
   };
 };
 
@@ -720,5 +793,6 @@ module.exports = {
   chat,
   generateAgoraToken,
   startAgoraAgent,
-  createMockOrder
+  createMockOrder,
+  executeTool
 };

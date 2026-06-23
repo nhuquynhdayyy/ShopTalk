@@ -5,7 +5,10 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "migrate": "node src/config/migrate.js"
+    "migrate": "node src/config/migrate.js",
+    "test:agora": "node test-agora-voice.js",
+    "test:ai": "node test-ai.js",
+    "test:order": "node test-order.js"
   },
   "dependencies": {
     "@solana/pay": "^0.2.1",

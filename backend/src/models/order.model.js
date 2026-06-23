@@ -16,12 +16,12 @@ const db = require('../config/db');
  * @returns {Promise<Object>} Đơn hàng vừa tạo
  */
 const createOrder = async (orderData) => {
-  const { reference, product_name, amount, seller_wallet, status, expires_at } = orderData;
+  const { reference, product_name, amount, seller_wallet, status, expires_at, customer_name, customer_address, items_list } = orderData;
   
   // Sử dụng COALESCE trong PostgreSQL để tự động điền các giá trị mặc định nếu tham số truyền vào là null/undefined
   const queryText = `
-    INSERT INTO orders (reference, product_name, amount, seller_wallet, status, expires_at)
-    VALUES ($1, $2, $3, $4, COALESCE($5, 'pending'), COALESCE($6, CURRENT_TIMESTAMP + INTERVAL '15 minutes'))
+    INSERT INTO orders (reference, product_name, amount, seller_wallet, status, expires_at, customer_name, customer_address, items_list)
+    VALUES ($1, $2, $3, $4, COALESCE($5, 'pending'), COALESCE($6, CURRENT_TIMESTAMP + INTERVAL '15 minutes'), $7, $8, $9)
     RETURNING *;
   `;
   
@@ -31,7 +31,10 @@ const createOrder = async (orderData) => {
     amount,
     seller_wallet,
     status || null,
-    expires_at || null
+    expires_at || null,
+    customer_name || null,
+    customer_address || null,
+    items_list ? (typeof items_list === 'string' ? items_list : JSON.stringify(items_list)) : null
   ];
 
   try {
