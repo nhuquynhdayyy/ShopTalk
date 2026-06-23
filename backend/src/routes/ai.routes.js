@@ -33,6 +33,7 @@ router.post('/chat', async (req, res) => {
       success: true,
       sessionId,
       reply: result.reply,
+      function_call: result.function_call || null,
       escalate: result.escalate || false,
       qrCodeImage: result.qrCodeImage || null,
       orderId: result.orderId || null

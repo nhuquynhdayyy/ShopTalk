@@ -201,8 +201,7 @@ const checkEscalation = (text) => {
     'chuyển sang người thật',
     'nhân viên hỗ trợ',
     'support',
-    'nói với người thật'
-    'gặp chủ shop',
+    'nói với người thật',
     'yêu cầu nhân viên',
     'gặp admin',
     'chat với người thật'
@@ -304,7 +303,32 @@ const createMockOrder = (productName = 'Solana Mobile Saga v2', amount = 0.1) =>
   };
 };
 
-// ─── Xử lý Hội thoại (Core Chat Engine) ───────────────────────────────────────
+const parseReplyContent = (content) => {
+  if (!content) return { text_reply: '', function_call: null };
+
+  const regex = /<function=([^>]+)>([\s\S]*?)<\/function>/g;
+  let text_reply = content;
+  let function_call = null;
+
+  const match = regex.exec(content);
+  if (match) {
+    text_reply = content.replace(regex, '').trim();
+    const funcName = match[1].trim();
+    const funcArgsStr = match[2].trim();
+    let args = {};
+    try {
+      args = JSON.parse(funcArgsStr);
+    } catch (e) {
+      args = { raw: funcArgsStr };
+    }
+    function_call = {
+      name: funcName,
+      arguments: args
+    };
+  }
+
+  return { text_reply, function_call };
+};
 
 /**
  * Gửi tin nhắn và nhận phản hồi từ LLM
@@ -320,6 +344,7 @@ const chat = async (sessionId, userMessage) => {
     return {
       success: true,
       reply: "Dạ em xin lỗi vì sự bất tiện này. Em sẽ chuyển ngay cuộc trò chuyện này sang nhân viên hỗ trợ thực tế để xử lý nhanh nhất cho anh/chị ạ! 🙏",
+      function_call: null,
       escalate: true
     };
   }
@@ -448,9 +473,11 @@ const chat = async (sessionId, userMessage) => {
       // Lưu câu trả lời cuối cùng vào history
       sessionMessages.push(assistantMessage);
 
+      const { text_reply, function_call } = parseReplyContent(assistantMessage.content);
       return {
         success: true,
-        reply: assistantMessage.content,
+        reply: text_reply,
+        function_call,
         escalate: checkEscalation(userMessage),
         qrCodeImage,
         orderId
@@ -459,9 +486,11 @@ const chat = async (sessionId, userMessage) => {
       // Không có tool call, lưu câu trả lời vào history và trả về
       sessionMessages.push(assistantMessage);
 
+      const { text_reply, function_call } = parseReplyContent(assistantMessage.content);
       return {
         success: true,
-        reply: assistantMessage.content,
+        reply: text_reply,
+        function_call,
         escalate: checkEscalation(userMessage)
       };
     }
@@ -578,7 +607,7 @@ const mockChatFlow = async (sessionMessages, userMessage) => {
   let qrCodeImage = null;
   let orderId = null;
 
-// ─── Xem hàng / Danh sách sản phẩm ─────────────────────────────────────────
+  // ─── Xem hàng / Danh sách sản phẩm ─────────────────────────────────────────
   if (
     lowercaseMsg.includes('kho') ||
     lowercaseMsg.includes('san pham') ||
@@ -686,40 +715,39 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
 
 Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng dùng ví Phantom/Solflare quét mã này nhé!`;
     } catch (err) {
-      reply = `Lỗi hệ thống khi tạo đơn hàng: ${err.message}`;
-    }
-  }
+      console.warn('[AI Agent] Lỗi tạo đơn thực tế, chuyển sang chế độ mock order fallback:', err.message);
+      try {
+        // Tạo mock order — không cần DB hay Blockchain
+        const mockOrder = createMockOrder(productName, amount);
+        orderId = mockOrder.id;
+        qrCodeImage = mockOrder.qr_code;
 
-    // Tạo mock order — không cần DB hay Blockchain
-    const mockOrder = createMockOrder(productName, amount);
-    orderId = mockOrder.id;
-    qrCodeImage = mockOrder.qr_code;
+        reply = `Dạ em đã tạo đơn hàng thành công cho anh/chị rồi ạ! 🎉
 
-    reply = `Dạ em đã tạo đơn hàng thành công cho anh/chị rồi ạ! 🎉
-
-- 📦 **Sản phẩm**: ${newOrder.product_name}
-- 💵 **Số tiền**: ${newOrder.amount} USDC (Devnet)
-- 🔖 **Mã đơn hàng**: \`${newOrder.id}\`
+- 📦 **Sản phẩm**: ${mockOrder.product_name}
+- 💵 **Số tiền**: ${mockOrder.amount} USDC (Devnet)
+- 🔖 **Mã đơn hàng**: \`${mockOrder.id}\`
 
 📲 Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng mở ví **Phantom/Solflare** (nhớ chọn mạng **Devnet**) rồi quét mã này để hoàn tất thanh toán nhé!
 
 ⏰ Mã QR có hiệu lực trong **15 phút**, nếu hết hạn anh/chị có thể nhắn lại để em tạo mới ạ.`;
-    } catch (err) {
-      reply = `Lỗi hệ thống khi tạo đơn hàng: ${err.message}`;
+      } catch (mockErr) {
+        reply = `Lỗi hệ thống khi tạo đơn hàng: ${err.message}`;
+      }
     }
   }
 
   // ─── Hướng dẫn thanh toán ────────────────────────────────────────────────────
   else if (
-    lowercaseMsg.includes('thanh toán') ||
-    lowercaseMsg.includes('thanh toan') ||
-    lowercaseMsg.includes('chuyển tiền') ||
-    lowercaseMsg.includes('chuyen tien') ||
-    lowercaseMsg.includes('qr') ||
-    lowercaseMsg.includes('phantom') ||
-    lowercaseMsg.includes('solflare')
-  ) {
-    reply = `Dạ để thanh toán anh/chị làm theo các bước sau nhé:
+  lowercaseMsg.includes('thanh toán') ||
+  lowercaseMsg.includes('thanh toan') ||
+  lowercaseMsg.includes('chuyển tiền') ||
+  lowercaseMsg.includes('chuyen tien') ||
+  lowercaseMsg.includes('qr') ||
+  lowercaseMsg.includes('phantom') ||
+  lowercaseMsg.includes('solflare')
+) {
+  reply = `Dạ để thanh toán anh/chị làm theo các bước sau nhé:
 
 1️⃣ Mở app **Phantom** hoặc **Solflare** trên điện thoại
 2️⃣ Chuyển sang mạng **Devnet** (vào Settings → Network → Devnet)
@@ -728,9 +756,9 @@ Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng dùng 
 5️⃣ Xác nhận giao dịch — tiền sẽ chuyển trong vài giây!
 
 Nếu anh/chị cần hỗ trợ thêm cứ nhắn em nhé 😊`;
-  }
-  else {
-    reply = `Dạ cửa hàng **ShopTalk** xin chào anh/chị! 👋
+}
+else {
+  reply = `Dạ cửa hàng **ShopTalk** xin chào anh/chị! 👋
 
 Em là trợ lý AI bán hàng tự động của ShopTalk. Em có thể giúp anh/chị:
 - 🔍 **Xem danh sách sản phẩm** (gõ: "xem hàng" hoặc "có gì bán")
@@ -738,17 +766,17 @@ Em là trợ lý AI bán hàng tự động của ShopTalk. Em có thể giúp a
 - 💳 **Hướng dẫn thanh toán** USDC qua Solana Pay
 
 Anh/chị cần em hỗ trợ gì ạ? 😊`;
-  }
+}
 
-  sessionMessages.push({ role: 'assistant', content: reply });
+sessionMessages.push({ role: 'assistant', content: reply });
 
-  return {
-    success: true,
-    reply,
-    escalate: false,
-    qrCodeImage,
-    orderId
-  };
+return {
+  success: true,
+  reply,
+  escalate: false,
+  qrCodeImage,
+  orderId
+};
 };
 
 module.exports = {
