@@ -1,291 +1,371 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import api from '../api';
-import { useWebSocket } from '../hooks/useWebSocket';
+import ConnectionIndicator from '../components/ConnectionIndicator';
+import OffRampModal from '../components/OffRampModal';
 import OrderCard from '../components/OrderCard';
+import { useWebSocket } from '../hooks/useWebSocket';
 
-// Tỷ giá quy đổi USDC/VND
-const EXCHANGE_RATE = 25450;
+const mockOrders = [
+  {
+    id: '6d55d8a8-303b-4c04-baa4-11de65f3f011',
+    reference: '8TZdSznWn95R3FkbWQW7AZPnwpJS28C7rCZrKk2mock1',
+    product_name: 'Tai nghe Bluetooth ShopTalk',
+    amount: 32,
+    seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
+    status: 'paid',
+    tx_signature: '5YxqMockPaidSignaturewD9fBUnXw9oA3GZt2dAeY7aL',
+    created_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    expires_at: new Date(Date.now() + 3 * 60 * 1000).toISOString()
+  },
+  {
+    id: '5c0b2c3a-6332-4d2c-8d71-29837f1af222',
+    reference: '6yduhzHqGQy6kDKbVmqM2ck7Z7ZohJk7mock2',
+    product_name: 'Áo thun ShopTalk Essential',
+    amount: 18,
+    seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
+    status: 'pending',
+    tx_signature: null,
+    created_at: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
+    expires_at: new Date(Date.now() + 9 * 60 * 1000).toISOString()
+  },
+  {
+    id: '130d21fc-7397-4aca-8a20-88368b8cd333',
+    reference: 'FUsVD1dYut8ykQhUGxQB8mWqAwmismatch3',
+    product_name: 'Mũ ShopTalk Logo',
+    amount: 12,
+    seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
+    status: 'payment_mismatch',
+    tx_signature: '3QmMismatchMockSignatureZXa8UuT',
+    created_at: new Date(Date.now() - 48 * 60 * 1000).toISOString(),
+    expires_at: new Date(Date.now() - 33 * 60 * 1000).toISOString()
+  },
+  {
+    id: '5bc1a558-4a94-4797-9a41-9326527c8444',
+    reference: '9PcdExpiredReferenceZ5vPj1mock4',
+    product_name: 'Sticker pack crypto',
+    amount: 5,
+    seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
+    status: 'expired',
+    tx_signature: null,
+    created_at: new Date(Date.now() - 82 * 60 * 1000).toISOString(),
+    expires_at: new Date(Date.now() - 67 * 60 * 1000).toISOString()
+  }
+];
+
+const sortOrders = (orders) => (
+  [...orders].sort((a, b) => {
+    if (a.status === 'paid' && b.status !== 'paid') return -1;
+    if (a.status !== 'paid' && b.status === 'paid') return 1;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  })
+);
+
+const mergeOrder = (orders, incomingOrder) => {
+  const existing = orders.find((order) => order.id === incomingOrder.id);
+  const merged = { ...existing, ...incomingOrder };
+  const rest = orders.filter((order) => order.id !== incomingOrder.id);
+
+  if (merged.status === 'paid') {
+    return [merged, ...rest];
+  }
+
+  return sortOrders([merged, ...rest]);
+};
+
+const formatTimestamp = (timestamp) => {
+  try {
+    return new Intl.DateTimeFormat('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit'
+    }).format(new Date(timestamp));
+  } catch (_) {
+    return timestamp;
+  }
+};
 
 function Dashboard() {
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState(sortOrders(mockOrders));
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [bankName, setBankName] = useState('VPBank');
-  const [bankAccount, setBankAccount] = useState('1234567890');
-  const [withdrawStep, setWithdrawStep] = useState(0); // 0: input, 1: loading, 2: success
-  const [alertMessage, setAlertMessage] = useState(null);
+  const [isOffRampOpen, setIsOffRampOpen] = useState(false);
+  const [dataMode, setDataMode] = useState('mock');
+  const [isFetching, setIsFetching] = useState(false);
+  const [paidAlert, setPaidAlert] = useState(null);
+  const [escalations, setEscalations] = useState([]);
+  const ordersRef = useRef(orders);
 
-  // Lấy toàn bộ đơn hàng lúc khởi động
   useEffect(() => {
-    fetchOrders();
+    ordersRef.current = orders;
+  }, [orders]);
+
+  const playChime = useCallback(() => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+
+      const context = new AudioContext();
+      const gainNode = context.createGain();
+      const firstTone = context.createOscillator();
+      const secondTone = context.createOscillator();
+
+      gainNode.gain.setValueAtTime(0.0001, context.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.45);
+
+      firstTone.frequency.setValueAtTime(880, context.currentTime);
+      secondTone.frequency.setValueAtTime(1174.66, context.currentTime + 0.16);
+
+      firstTone.connect(gainNode);
+      secondTone.connect(gainNode);
+      gainNode.connect(context.destination);
+
+      firstTone.start(context.currentTime);
+      firstTone.stop(context.currentTime + 0.18);
+      secondTone.start(context.currentTime + 0.18);
+      secondTone.stop(context.currentTime + 0.45);
+      secondTone.onended = () => context.close();
+    } catch (_) {
+      // Browsers may block audio until the seller has interacted with the page.
+    }
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
+    setIsFetching(true);
+
     try {
       const response = await api.getOrders();
-      if (response.success) {
-        setOrders(response.data);
-      }
-    } catch (error) {
-      console.error('Lỗi khi lấy đơn hàng:', error);
+      const nextOrders = Array.isArray(response.data) ? response.data : [];
+
+      setOrders(sortOrders(nextOrders));
+      setDataMode('live');
+    } catch (_) {
+      setOrders((current) => (current.length ? current : sortOrders(mockOrders)));
+      setDataMode('mock');
+    } finally {
+      setIsFetching(false);
     }
-  };
+  }, []);
 
-  // Phát âm thanh 'tinh tinh' khi có thanh toán thành công
-  const playChime = () => {
-    try {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav');
-      audio.volume = 0.5;
-      audio.play();
-    } catch (e) {
-      console.warn('Không thể phát âm thanh thông báo:', e.message);
-    }
-  };
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
-  // Lắng nghe sự kiện WebSocket 'order_status_updated'
-  useWebSocket('order_status_updated', (updatedOrder) => {
-    console.log('[Dashboard] Đơn hàng được cập nhật:', updatedOrder);
-    
-    // Cập nhật trạng thái trong list mà không cần F5
-    setOrders(prevOrders => 
-      prevOrders.map(order => 
-        order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order
-      )
-    );
+  const handleOrderStatusUpdated = useCallback((updatedOrder) => {
+    const previousOrder = ordersRef.current.find((order) => order.id === updatedOrder.id);
+    const becamePaid = updatedOrder.status === 'paid' && previousOrder?.status !== 'paid';
 
-    // Nếu đơn hàng chuyển sang 'paid'
-    if (updatedOrder.status === 'paid') {
+    setOrders((current) => mergeOrder(current, updatedOrder));
+
+    if (becamePaid) {
       playChime();
-      
-      // Hiển thị Banner Alert thông báo nổi bật góc màn hình
-      setAlertMessage(`🎉 [THANH TOÁN THÀNH CÔNG] Đơn hàng #${updatedOrder.id.slice(0, 8)} đã được xác nhận +${updatedOrder.amount} USDC!`);
-      setTimeout(() => setAlertMessage(null), 8000);
+      setPaidAlert({
+        id: updatedOrder.id,
+        product_name: updatedOrder.product_name || previousOrder?.product_name || 'Đơn hàng',
+        amount: updatedOrder.amount || previousOrder?.amount || 0
+      });
+      window.setTimeout(() => setPaidAlert(null), 7000);
     }
+  }, [playChime]);
+
+  const handleEscalationRequest = useCallback((payload) => {
+    const escalation = {
+      id: payload.sessionId || `escalation-${Date.now()}`,
+      sessionId: payload.sessionId,
+      message: payload.message || 'Khách hàng cần nhân viên hỗ trợ.',
+      timestamp: payload.timestamp || new Date().toISOString(),
+      accepted: false
+    };
+
+    setEscalations((current) => [
+      escalation,
+      ...current.filter((item) => item.id !== escalation.id)
+    ]);
+  }, []);
+
+  const socketState = useWebSocket({
+    order_status_updated: handleOrderStatusUpdated,
+    escalation_request: handleEscalationRequest
   });
 
-  // Mở modal Off-ramp
-  const handleOpenOfframp = (order) => {
+  const totals = useMemo(() => {
+    const paidOrders = orders.filter((order) => order.status === 'paid');
+    const pendingOrders = orders.filter((order) => order.status === 'pending');
+    const attentionOrders = orders.filter((order) => order.status === 'payment_mismatch');
+
+    return {
+      paidAmount: paidOrders.reduce((sum, order) => sum + Number(order.amount || 0), 0),
+      paidCount: paidOrders.length,
+      pendingCount: pendingOrders.length,
+      attentionCount: attentionOrders.length
+    };
+  }, [orders]);
+
+  const handleOpenOffRamp = (order) => {
     setSelectedOrder(order);
-    setWithdrawStep(0);
-    setIsModalOpen(true);
+    setIsOffRampOpen(true);
   };
 
-  // Xử lý thực hiện rút tiền
-  const handleConfirmWithdraw = () => {
-    setWithdrawStep(1); // Mở trạng thái loading
-    
-    // Giả lập cuộc gọi API cổng CAEX/TCEX trong 2.5 giây
-    setTimeout(() => {
-      setWithdrawStep(2); // Mở trạng thái thành công
-      
-      // Đồng thời cập nhật trạng thái đơn hàng cục bộ để phản ánh việc đã rút tiền (hoặc chỉ cập nhật UI)
-      setOrders(prevOrders => 
-        prevOrders.map(order => 
-          order.id === selectedOrder.id ? { ...order, offramped: true } : order
-        )
-      );
-    }, 2500);
+  const handleCompleteOffRamp = (order) => {
+    if (!order?.id) return;
+
+    setOrders((current) => current.map((item) => (
+      item.id === order.id ? { ...item, offramped: true } : item
+    )));
+  };
+
+  const handleAcceptEscalation = (id) => {
+    setEscalations((current) => current.map((item) => (
+      item.id === id ? { ...item, accepted: true } : item
+    )));
   };
 
   return (
-    <div className="flex-1 space-y-6">
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-[#F0F2F5]">Bảng quản trị cửa hàng</h2>
-          <p className="text-xs text-[#8F9CAE]">Quản lý và đối soát đơn hàng Solana Pay tự động (Thời gian thực)</p>
-        </div>
-        <button
-          onClick={fetchOrders}
-          className="self-start md:self-auto px-4 py-2 bg-[#1C2533] hover:bg-[#243042] border border-[#243042] text-sm text-[#F0F2F5] rounded-lg transition-colors flex items-center gap-1.5"
-        >
-          🔄 Làm mới danh sách
-        </button>
-      </div>
-
-      {/* Real-time Alert Banner */}
-      <AnimatePresence>
-        {alertMessage && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-emerald-500 text-white font-semibold text-sm px-6 py-4 rounded-xl shadow-xl flex justify-between items-center border border-emerald-400"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🔔</span>
-              <p>{alertMessage}</p>
-            </div>
-            <button onClick={() => setAlertMessage(null)} className="text-white hover:text-gray-200">✕</button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Orders List Container */}
-      <div className="bg-[#151B26] border border-[#243042] rounded-2xl shadow-xl p-6">
-        <h3 className="text-base font-bold text-[#F0F2F5] mb-4 flex items-center gap-2">
-          📦 Danh sách đơn hàng 
-          <span className="bg-[#5B3FE0]/15 text-[#5B3FE0] border border-[#5B3FE0]/30 text-xs px-2 py-0.5 rounded-full font-mono">
-            {orders.length}
-          </span>
-        </h3>
-
-        {orders.length === 0 ? (
-          <div className="text-center py-12 text-[#8F9CAE] space-y-2">
-            <span className="text-4xl block">📭</span>
-            <p className="text-sm">Chưa có đơn hàng nào trong hệ thống.</p>
-            <p className="text-xs text-gray-600">Sử dụng Chat Widget để tạo đơn hàng mẫu.</p>
+    <>
+      <section className="mx-auto w-full max-w-7xl space-y-6">
+        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-teal-700">Merchant Dashboard</p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Đơn hàng ShopTalk</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              Theo dõi thanh toán USDC, xử lý cảnh báo và rút tiền về ngân hàng trong cùng một màn hình.
+            </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <AnimatePresence mode="popLayout">
-              {orders.map((order) => (
-                <OrderCard 
-                  key={order.id} 
-                  order={order} 
-                  onOfframp={handleOpenOfframp}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
-      </div>
 
-      {/* Off-ramp Modal (USDC -> VND Exchange) */}
-      <AnimatePresence>
-        {isModalOpen && selectedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Overlay background */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            
-            {/* Modal Box */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-[#151B26] border border-[#243042] w-full max-w-md rounded-2xl shadow-2xl relative overflow-hidden p-6 z-10"
+          <div className="flex flex-wrap items-center gap-3">
+            <ConnectionIndicator {...socketState} />
+            {dataMode === 'mock' && (
+              <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                Mock data
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={fetchOrders}
+              disabled={isFetching}
+              className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-wait disabled:text-slate-400"
             >
-              {/* Header */}
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  💸 Rút USDC về Ngân hàng (Off-ramp)
-                </h3>
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="text-gray-400 hover:text-white text-lg"
+              {isFetching ? 'Đang tải...' : 'Làm mới'}
+            </button>
+          </div>
+        </header>
+
+        <AnimatePresence>
+          {paidAlert && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p>
+                  Đơn <span className="font-semibold">{paidAlert.product_name}</span> đã thanh toán thành công:{' '}
+                  <span className="font-semibold">+{Number(paidAlert.amount || 0).toFixed(2)} USDC</span>.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPaidAlert(null)}
+                  className="self-start rounded-lg px-2 py-1 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 sm:self-auto"
                 >
-                  ✕
+                  Đóng
                 </button>
               </div>
-
-              {/* Step 0: Input form */}
-              {withdrawStep === 0 && (
-                <div className="space-y-4">
-                  <div className="bg-[#0B0E14] p-4 rounded-xl border border-[#243042] space-y-2">
-                    <div className="flex justify-between text-xs text-[#8F9CAE]">
-                      <span>Đơn hàng:</span>
-                      <span className="font-mono text-white">#{selectedOrder.id.slice(0, 8)}...</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-[#8F9CAE]">
-                      <span>Số dư rút:</span>
-                      <span className="font-bold text-[#14F195]">{selectedOrder.amount} USDC</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-[#8F9CAE] border-t border-[#243042]/55 pt-2">
-                      <span>Tỷ giá đối tác (CAEX/TCEX):</span>
-                      <span className="text-white">1 USDC = {EXCHANGE_RATE.toLocaleString('vi-VN')} VND</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-[#8F9CAE] font-semibold border-t border-[#243042]/55 pt-2">
-                      <span className="text-[#5B3FE0]">Tổng thực nhận VND:</span>
-                      <span className="text-lg font-bold text-[#14F195]">
-                        {(selectedOrder.amount * EXCHANGE_RATE).toLocaleString('vi-VN')} VND
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Bank info form */}
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-[#8F9CAE] mb-1 font-medium">Ngân hàng thụ hưởng</label>
-                      <select 
-                        value={bankName}
-                        onChange={(e) => setBankName(e.target.value)}
-                        className="w-full bg-[#0B0E14] border border-[#243042] rounded-lg px-3 py-2 text-sm text-[#F0F2F5] focus:outline-none focus:border-[#5B3FE0]"
-                      >
-                        <option value="VPBank">VPBank (CAEX Thí điểm)</option>
-                        <option value="TCBS">Techcombank (TCEX Thí điểm)</option>
-                        <option value="Vietcombank">Vietcombank</option>
-                        <option value="MBBank">MB Bank</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-[#8F9CAE] mb-1 font-medium">Số tài khoản ngân hàng</label>
-                      <input 
-                        type="text"
-                        value={bankAccount}
-                        onChange={(e) => setBankAccount(e.target.value)}
-                        className="w-full bg-[#0B0E14] border border-[#243042] rounded-lg px-3 py-2 text-sm text-[#F0F2F5] font-mono focus:outline-none focus:border-[#5B3FE0]"
-                        placeholder="Nhập số tài khoản..."
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleConfirmWithdraw}
-                    className="w-full py-3 bg-[#5B3FE0] hover:bg-[#4E34C8] text-white font-semibold text-sm rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    🏦 Xác nhận rút về ngân hàng
-                  </button>
-                </div>
-              )}
-
-              {/* Step 1: Loading API */}
-              {withdrawStep === 1 && (
-                <div className="py-8 text-center space-y-4">
-                  <div className="w-12 h-12 border-4 border-[#5B3FE0] border-t-transparent rounded-full animate-spin mx-auto"></div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">Đang thực hiện giao dịch off-ramp...</p>
-                    <p className="text-xs text-[#8F9CAE] mt-1">Đang kết nối cổng đối tác API CAEX/TCEX để quy đổi sang VND...</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 2: Success response */}
-              {withdrawStep === 2 && (
-                <div className="py-4 text-center space-y-4">
-                  <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center justify-center text-3xl mx-auto">
-                    ✓
-                  </div>
-                  <div>
-                    <h4 className="text-base font-bold text-white">Rút tiền thành công!</h4>
-                    <p className="text-xs text-[#8F9CAE] mt-1.5 leading-relaxed">
-                      Đã quy đổi thành công <b>{selectedOrder.amount} USDC</b> sang VND.<br />
-                      Số tiền <b>{(selectedOrder.amount * EXCHANGE_RATE).toLocaleString('vi-VN')} VND</b> đã được chuyển về tài khoản <b>{bankAccount}</b> tại <b>{bankName}</b>.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-6 py-2.5 bg-[#243042] hover:bg-[#2C3B52] text-white font-medium text-sm rounded-lg transition-colors border border-[#2c3b52] w-full"
-                  >
-                    Đóng
-                  </button>
-                </div>
-              )}
-
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-    </div>
+        <AnimatePresence initial={false}>
+          {escalations.map((item) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="rounded-lg border border-amber-200 bg-amber-50 p-4"
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-amber-950">
+                    Khách hàng cần nhân viên hỗ trợ
+                  </p>
+                  <p className="mt-1 text-sm text-amber-900">{item.message}</p>
+                  <p className="mt-1 text-xs text-amber-700">
+                    Session {item.sessionId || 'không rõ'} · {formatTimestamp(item.timestamp)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleAcceptEscalation(item.id)}
+                  disabled={item.accepted}
+                  className="h-10 rounded-lg bg-amber-900 px-4 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:bg-amber-200 disabled:text-amber-800"
+                >
+                  {item.accepted ? 'Đã nhận' : 'Nhận'}
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">USDC đã nhận</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-950">{totals.paidAmount.toFixed(2)}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Đơn đã thanh toán</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-950">{totals.paidCount}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Đang chờ</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-950">{totals.pendingCount}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Cần chú ý</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-950">{totals.attentionCount}</p>
+          </div>
+        </div>
+
+        <section>
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">Danh sách đơn hàng</h2>
+              <p className="text-sm text-slate-500">Đơn vừa thanh toán sẽ tự nhảy lên đầu danh sách.</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              {orders.length} đơn
+            </span>
+          </div>
+
+          {orders.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+              <h3 className="text-base font-semibold text-slate-950">Chưa có đơn hàng</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Khi khách chốt đơn từ Chat Widget, đơn sẽ xuất hiện tại đây.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <AnimatePresence initial={false} mode="popLayout">
+                {orders.map((order) => (
+                  <OrderCard key={order.id} order={order} onOfframp={handleOpenOffRamp} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </section>
+      </section>
+
+      <OffRampModal
+        isOpen={isOffRampOpen}
+        order={selectedOrder}
+        onClose={() => setIsOffRampOpen(false)}
+        onComplete={handleCompleteOffRamp}
+      />
+    </>
   );
 }
 
+export { mockOrders };
 export default Dashboard;
