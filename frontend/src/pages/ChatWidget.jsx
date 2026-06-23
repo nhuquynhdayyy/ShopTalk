@@ -112,7 +112,128 @@ function TypingIndicator() {
   );
 }
 
-function ChatBubble({ message }) {
+const parseMessageContent = (content, onShowQr) => {
+  if (!content) return null;
+
+  // Regex to match <function=name>JSON_ARGS</function>
+  const regex = /<function=([^>]+)>([\s\S]*?)<\/function>/g;
+  const elements = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(content)) !== null) {
+    const textBefore = content.substring(lastIndex, match.index);
+    if (textBefore) {
+      elements.push(
+        <span key={`text-${lastIndex}`} className="whitespace-pre-line">
+          {textBefore}
+        </span>
+      );
+    }
+
+    const funcName = match[1].trim();
+    const funcArgsStr = match[2].trim();
+    let args = {};
+    try {
+      args = JSON.parse(funcArgsStr);
+    } catch (e) {
+      args = { raw: funcArgsStr };
+    }
+
+    if (funcName === 'create_order' || funcName === 'generate_payment_qr') {
+      const orderId = args.order_id || args.id;
+      const orderAmount = args.amount || args.price_usdc;
+      const productName = args.product_name || args.name || 'Sản phẩm';
+      const qrCodeImage = args.qr_code || args.qrCodeImage;
+      const sellerWallet = args.seller_wallet;
+
+      elements.push(
+        <div key={`func-${match.index}`} className="my-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-800 shadow-inner">
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-100 text-teal-800 text-[10px] font-bold">✓</span>
+            <h4 className="text-xs font-semibold text-slate-900">Đơn hàng được khởi tạo</h4>
+          </div>
+
+          <div className="mt-2.5 space-y-1 text-xs text-slate-600">
+            <div className="flex justify-between">
+              <span>Sản phẩm:</span>
+              <span className="font-semibold text-slate-800">{productName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Số tiền:</span>
+              <span className="font-semibold text-teal-700">{orderAmount} USDC (Devnet)</span>
+            </div>
+            {orderId && (
+              <div className="flex justify-between">
+                <span>Mã đơn:</span>
+                <span className="font-mono text-[10px] text-slate-500">{orderId.slice(0, 8)}...</span>
+              </div>
+            )}
+          </div>
+
+          {qrCodeImage && (
+            <div className="mt-3 flex flex-col items-center justify-center rounded bg-white p-2 border border-slate-200">
+              <img src={qrCodeImage} alt="QR Code Solana Pay" className="h-40 w-40 object-contain" />
+              <p className="mt-1 text-[9px] text-slate-400">Quét bằng ví Phantom/Solflare (Devnet)</p>
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {qrCodeImage && (
+              <button
+                type="button"
+                onClick={() => onShowQr && onShowQr(qrCodeImage, {
+                  id: orderId,
+                  product_name: productName,
+                  amount: orderAmount,
+                  seller_wallet: sellerWallet
+                })}
+                className="h-8 rounded bg-teal-600 px-3 text-xs font-semibold text-white transition hover:bg-teal-700"
+              >
+                Phóng to QR
+              </button>
+            )}
+            {sellerWallet && (
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(sellerWallet);
+                  alert('Đã copy địa chỉ ví người nhận!');
+                }}
+                className="h-8 rounded border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Copy ví người bán
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    } else if (funcName === 'check_inventory') {
+      const productName = args.product_name;
+      elements.push(
+        <div key={`func-${match.index}`} className="my-2 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />
+          <span>Đang kiểm tra kho: <strong className="text-slate-800">{productName}</strong></span>
+        </div>
+      );
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  const textAfter = content.substring(lastIndex);
+  if (textAfter) {
+    elements.push(
+      <span key={`text-${lastIndex}`} className="whitespace-pre-line">
+        {textAfter}
+      </span>
+    );
+  }
+
+  return <div className="space-y-1">{elements}</div>;
+};
+
+function ChatBubble({ message, onShowQr }) {
   const isUser = message.role === 'user';
 
   return (
@@ -130,7 +251,7 @@ function ChatBubble({ message }) {
             : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
         }`}
       >
-        {message.content}
+        {isUser ? message.content : parseMessageContent(message.content, onShowQr)}
       </div>
     </motion.div>
   );
@@ -313,7 +434,11 @@ function ChatWidget() {
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <AnimatePresence initial={false}>
             {messages.map((message) => (
-              <ChatBubble key={message.id} message={message} />
+              <ChatBubble
+                key={message.id}
+                message={message}
+                onShowQr={(qrCodeImage, order) => setQrPayload({ qrCodeImage, order })}
+              />
             ))}
           </AnimatePresence>
 

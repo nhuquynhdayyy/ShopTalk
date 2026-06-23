@@ -14,6 +14,11 @@ Quy tắc ứng xử quan trọng:
 3. Khi khách đồng ý mua, hãy hỏi rõ thông tin (tên sản phẩm, số lượng, địa chỉ ví nhận nếu cần) và gọi công cụ \`create_order\` để tạo đơn hàng.
 4. Sau khi tạo đơn hàng thành công, gọi ngay công cụ \`generate_payment_qr\` để lấy ảnh QR Code thanh toán Solana Pay, hiển thị thông tin này cho khách hàng và hướng dẫn họ dùng ví Phantom/Solflare (đã chuyển sang mạng Devnet) quét mã để hoàn tất.
 5. Luôn nhắc nhở khách rằng giao dịch được thanh toán bằng đồng USDC trên mạng Solana Devnet.
+6. Bạn là AI Agent bán hàng chính thức. TUYỆT ĐỐI không được chủ động giới thiệu, đề xuất khách hàng liên hệ nhân viên hỗ trợ hoặc tự ý chuyển giao cuộc nói chuyện sang người thật trừ khi khách hàng trực tiếp yêu cầu từ khóa khiếu nại hoặc trực tiếp đòi gặp người thật. Nếu khách hàng hỏi mua sản phẩm hoặc hỏi các câu thông thường, hãy kiên trì tư vấn và hướng dẫn đặt hàng.
+
+LƯU Ý QUAN TRỌNG: 
+- Khi gọi 'create_order', bạn phải tự lấy tên sản phẩm và giá tiền (amount) từ thông tin bạn đã kiểm tra trước đó trong lịch sử trò chuyện.
+- Nếu người dùng đồng ý mua (nói "có", "mua luôn"...), hãy thực hiện gọi 'create_order' ngay lập tức với các thông số đã biết.
 
 Hãy giúp khách hàng có một trải nghiệm mua sắm tuyệt vời!`;
 
@@ -36,7 +41,6 @@ const getOrCreateSession = (sessionId) => {
 // ─── Định nghĩa Danh sách Tools (Function Calling) cho OpenAI ──────────────
 const OPENAI_TOOLS = [
   {
-    type: " his_tool", // Sẽ đổi thành type: "function" lúc gọi
     type: "function",
     function: {
       name: "check_inventory",
@@ -106,9 +110,9 @@ const executeTool = async (name, args) => {
       case 'check_inventory': {
         const product = checkInventory(args.product_name);
         if (!product) {
-          return JSON.stringify({ 
-            found: false, 
-            message: `Không tìm thấy sản phẩm "${args.product_name}" trong kho.` 
+          return JSON.stringify({
+            found: false,
+            message: `Không tìm thấy sản phẩm "${args.product_name}" trong kho.`
           });
         }
         return JSON.stringify({
@@ -124,7 +128,7 @@ const executeTool = async (name, args) => {
         // Sinh reference key ngẫu nhiên dùng thư viện @solana/web3.js
         const referenceKey = Keypair.generate().publicKey.toBase58();
         const sellerWallet = args.seller_wallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
-        
+
         const newOrder = await createOrder({
           reference: referenceKey,
           product_name: args.product_name,
@@ -152,12 +156,12 @@ const executeTool = async (name, args) => {
       case 'generate_payment_qr': {
         const order = await getOrderById(args.order_id);
         if (!order) {
-          return JSON.stringify({ 
-            success: false, 
-            message: `Không tìm thấy đơn hàng với mã ID: ${args.order_id}` 
+          return JSON.stringify({
+            success: false,
+            message: `Không tìm thấy đơn hàng với mã ID: ${args.order_id}`
           });
         }
-        
+
         const paymentUrl = createPaymentRequest(order);
         const qrCodeImage = await generateQRCode(paymentUrl);
 
@@ -187,13 +191,14 @@ const checkEscalation = (text) => {
   const escalationKeywords = [
     'khiếu nại',
     'nói chuyện với người thật',
-    'lỗi',
     'nhân viên thật',
     'gặp người thật',
     'gặp nhân viên',
     'chuyển sang người thật',
-    'nhân viên hỗ trợ',
-    'support'
+    'gặp chủ shop',
+    'yêu cầu nhân viên',
+    'gặp admin',
+    'chat với người thật'
   ];
   return escalationKeywords.some(keyword => lowercaseText.includes(keyword));
 };
@@ -217,13 +222,13 @@ const chat = async (sessionId, userMessage) => {
   }
 
   const sessionMessages = getOrCreateSession(sessionId);
-  
+
   // Lưu tin nhắn của người dùng vào context
   sessionMessages.push({ role: 'user', content: userMessage });
 
   const groqApiKey = process.env.GROQ_API_KEY;
   const openaiApiKey = process.env.OPENAI_API_KEY || process.env.LLM_API_KEY;
-  
+
   // Xác định API Key, Endpoint và Model sử dụng
   let apiKey = null;
   let apiUrl = 'https://api.openai.com/v1/chat/completions';
@@ -232,7 +237,8 @@ const chat = async (sessionId, userMessage) => {
   if (groqApiKey) {
     apiKey = groqApiKey;
     apiUrl = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
-    modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+    // modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+    modelName = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
     console.log(`[AI Agent] 🚀 Sử dụng Groq API với Model: ${modelName}`);
   } else if (openaiApiKey) {
     apiKey = openaiApiKey;
@@ -240,7 +246,7 @@ const chat = async (sessionId, userMessage) => {
     modelName = 'gpt-4o-mini';
     console.log(`[AI Agent] 🚀 Sử dụng OpenAI API với Model: ${modelName}`);
   }
-  
+
   // Nếu không có API Key, chạy chế độ Mock/Sandbox tự động để demo hoạt động không bị crash
   if (!apiKey) {
     console.warn('[AI Agent] ⚠️ Cảnh báo: Không tìm thấy GROQ_API_KEY, OPENAI_API_KEY hoặc LLM_API_KEY. Khởi chạy chế độ Mock để demo...');
@@ -270,7 +276,7 @@ const chat = async (sessionId, userMessage) => {
     }
 
     let assistantMessage = data.choices[0].message;
-    
+
     // Xử lý Tool Calling (nếu LLM yêu cầu gọi Tool)
     if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       // Đưa assistant message chứa tool_calls vào history
@@ -282,7 +288,7 @@ const chat = async (sessionId, userMessage) => {
       for (const toolCall of assistantMessage.tool_calls) {
         const name = toolCall.function.name;
         const args = JSON.parse(toolCall.function.arguments);
-        
+
         // Thực thi tool
         const toolResult = await executeTool(name, args);
 
@@ -294,7 +300,7 @@ const chat = async (sessionId, userMessage) => {
               qrCodeImage = parsed.qr_code;
               orderId = parsed.order_id;
             }
-          } catch (_) {}
+          } catch (_) { }
         }
         if (name === 'create_order') {
           try {
@@ -305,7 +311,7 @@ const chat = async (sessionId, userMessage) => {
                 qrCodeImage = parsed.qr_code;
               }
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         // Đưa kết quả tool vào history
@@ -335,25 +341,25 @@ const chat = async (sessionId, userMessage) => {
         throw new Error(`Second-step API Error: ${data.error.message}`);
       }
       assistantMessage = data.choices[0].message;
-      
+
       // Lưu câu trả lời cuối cùng vào history
       sessionMessages.push(assistantMessage);
 
       return {
         success: true,
         reply: assistantMessage.content,
-        escalate: checkEscalation(assistantMessage.content),
+        escalate: checkEscalation(userMessage),
         qrCodeImage,
         orderId
       };
     } else {
       // Không có tool call, lưu câu trả lời vào history và trả về
       sessionMessages.push(assistantMessage);
-      
+
       return {
         success: true,
         reply: assistantMessage.content,
-        escalate: checkEscalation(assistantMessage.content)
+        escalate: checkEscalation(userMessage)
       };
     }
 
@@ -467,7 +473,7 @@ const mockChatFlow = async (sessionMessages, userMessage) => {
 
   if (lowercaseMsg.includes('kho') || lowercaseMsg.includes('sản phẩm') || lowercaseMsg.includes('có gì') || lowercaseMsg.includes('bán gì')) {
     reply = "Dạ bên em đang sẵn kho sản phẩm cực hot: **Solana Mobile Saga v2** với giá đặc biệt cho demo là **0.1 USDC** (đang còn 10 chiếc). Anh/chị có muốn đặt mua luôn không ạ?";
-  } 
+  }
   else if (lowercaseMsg.includes('mua') || lowercaseMsg.includes('đặt hàng') || lowercaseMsg.includes('saga')) {
     // Tự động tạo đơn hàng mẫu cho demo
     try {
@@ -494,10 +500,10 @@ Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng mở v
     } catch (err) {
       reply = `Lỗi hệ thống khi tạo đơn hàng: ${err.message}`;
     }
-  } 
+  }
   else if (lowercaseMsg.includes('thanh toán') || lowercaseMsg.includes('chuyển tiền')) {
     reply = "Dạ anh/chị chỉ cần dùng ví Phantom hoặc Solflare trên điện thoại, quét mã QR mà em gửi ở trên, rồi ấn Xác nhận chuyển tiền là xong ạ. Giao dịch sẽ được cập nhật tự động sau vài giây trên blockchain Devnet.";
-  } 
+  }
   else {
     reply = "Dạ cửa hàng ShopTalk xin chào anh/chị! Em có thể giúp gì cho anh/chị hôm nay ạ? Bên em đang có điện thoại **Solana Mobile Saga v2** sẵn hàng đó ạ!";
   }

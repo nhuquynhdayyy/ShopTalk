@@ -22,7 +22,13 @@ const rateHistory = [
   { day: 'CN', rate: EXCHANGE_RATE }
 ];
 
-const banks = ['VPBank', 'Techcombank', 'Vietcombank', 'MB Bank', 'ACB'];
+const banks = [
+  { value: 'VPBank', label: 'VPBank (CAEX Thí điểm)' },
+  { value: 'Techcombank', label: 'Techcombank (TCEX Thí điểm)' },
+  { value: 'Vietcombank', label: 'Vietcombank' },
+  { value: 'MB Bank', label: 'MB Bank' },
+  { value: 'ACB', label: 'ACB' }
+];
 
 function OffRampModal({ isOpen, order, onClose, onComplete }) {
   const [bankName, setBankName] = useState('VPBank');
@@ -113,7 +119,7 @@ function OffRampModal({ isOpen, order, onClose, onComplete }) {
                       className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
                     >
                       {banks.map((bank) => (
-                        <option key={bank} value={bank}>{bank}</option>
+                        <option key={bank.value} value={bank.value}>{bank.label}</option>
                       ))}
                     </select>
                   </label>

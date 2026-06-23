@@ -2,7 +2,7 @@
   {
     "id": "prod-1",
     "name": "Solana Mobile Saga Phone",
-    "price_usdc": 499.99,
+    "price_usdc": 0.1,
     "stock": 5,
     "description": "Điện thoại Solana Saga thế hệ đầu tiên"
   },
@@ -16,7 +16,7 @@
   {
     "id": "prod-3",
     "name": "ShopTalk T-Shirt",
-    "price_usdc": 15.00,
+    "price_usdc": 0.1,
     "stock": 25,
     "description": "Áo thun phong cách ShopTalk"
   }
