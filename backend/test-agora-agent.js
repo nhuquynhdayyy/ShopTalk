@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '.env') });
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 
 async function testAgoraAgent() {
@@ -30,17 +30,21 @@ async function testAgoraAgent() {
       agent_rtc_uid: String(agentUid),
       remote_rtc_uids: ["*"],
       asr: {
+        vendor: "ares",
         language: "vi-VN"
       },
       llm: {
         url: "https://api.groq.com/openai/v1/chat/completions",
         api_key: groqApiKey,
         system_messages: [{ role: "system", content: "Xin chào, bạn tên là gì?" }],
-        params: { model: "llama-3.3-70b-versatile" }
+        params: { model: "llama-3.1-8b-instant", max_tokens: 300 }
       },
       tts: {
-        vendor: "microsoft",
-        params: { voice_name: "vi-VN-HoaiMyNeural" }
+        vendor: "elevenlabs",
+        params: {
+          voice_id: "21m00Tcm4TlvDq8ikWAM",
+          key: process.env.ELEVENLABS_API_KEY
+        }
       }
     }
   };

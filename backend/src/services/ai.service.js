@@ -572,8 +572,14 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
       agent_rtc_uid: String(agentUid),
       remote_rtc_uids: ["*"],
       asr: {
-        vendor: "ares",   // Agora ARES native ASR - không cần key ngoài
-        language: asrLanguage
+        vendor: process.env.AZURE_SPEECH_KEY ? "microsoft" : "ares",
+        language: asrLanguage,
+        ...(process.env.AZURE_SPEECH_KEY && {
+          params: {
+            key: process.env.AZURE_SPEECH_KEY,
+            region: process.env.AZURE_SPEECH_REGION || "southeastasia"
+          }
+        })
       },
       llm: {
         url: "https://api.groq.com/openai/v1/chat/completions",
@@ -582,8 +588,19 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
         params: { model: "llama-3.1-8b-instant", max_tokens: 300 }
       },
       tts: {
-        vendor: "microsoft",
-        params: { voice_name: ttsVoice }
+        vendor: process.env.ELEVENLABS_API_KEY ? "elevenlabs" : "microsoft",
+        params: process.env.ELEVENLABS_API_KEY 
+          ? {
+              voice_id: "EXAVITQu4vr4xnSDxMaL", // Giọng nữ Sarah (Free Premade)
+              key: process.env.ELEVENLABS_API_KEY
+            }
+          : { 
+              voice_name: ttsVoice,
+              ...(process.env.AZURE_SPEECH_KEY && {
+                key: process.env.AZURE_SPEECH_KEY,
+                region: process.env.AZURE_SPEECH_REGION || "southeastasia"
+              })
+            }
       }
     }
   };
