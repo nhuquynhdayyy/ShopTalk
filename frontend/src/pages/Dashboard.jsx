@@ -5,6 +5,7 @@ import ConnectionIndicator from '../components/ConnectionIndicator';
 import OffRampModal from '../components/OffRampModal';
 import OrderCard from '../components/OrderCard';
 import { useWebSocket } from '../hooks/useWebSocket';
+import mockExchangeRates from '../mocks/mockExchangeRates';
 
 const mockOrders = [
   {
@@ -71,6 +72,21 @@ const mergeOrder = (orders, incomingOrder) => {
   }
 
   return sortOrders([merged, ...rest]);
+};
+
+const normalizePaidOrder = (payload = {}) => {
+  const order = payload.order || payload.data || payload;
+
+  return {
+    ...order,
+    id: order.id || order.orderId || payload.orderId,
+    product_name: order.product_name || order.productName || 'Don hang ShopTalk',
+    amount: order.amount || 0,
+    status: 'paid',
+    tx_signature: order.tx_signature || order.txSignature || null,
+    created_at: order.created_at || order.createdAt || payload.timestamp || new Date().toISOString(),
+    expires_at: order.expires_at || order.expiresAt || null
+  };
 };
 
 const formatTimestamp = (timestamp) => {
@@ -169,6 +185,11 @@ function Dashboard() {
     }
   }, [playChime]);
 
+  const handleOrderPaid = useCallback((payload) => {
+    const paidOrder = normalizePaidOrder(payload);
+    handleOrderStatusUpdated(paidOrder);
+  }, [handleOrderStatusUpdated]);
+
   const handleEscalationRequest = useCallback((payload) => {
     const escalation = {
       id: payload.sessionId || `escalation-${Date.now()}`,
@@ -186,6 +207,7 @@ function Dashboard() {
 
   const socketState = useWebSocket({
     order_status_updated: handleOrderStatusUpdated,
+    order_paid: handleOrderPaid,
     escalation_request: handleEscalationRequest
   });
 
@@ -360,6 +382,7 @@ function Dashboard() {
       <OffRampModal
         isOpen={isOffRampOpen}
         order={selectedOrder}
+        exchangeRates={mockExchangeRates}
         onClose={() => setIsOffRampOpen(false)}
         onComplete={handleCompleteOffRamp}
       />

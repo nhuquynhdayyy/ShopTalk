@@ -1,8 +1,10 @@
-import AgoraRTC from 'agora-rtc-sdk-ng';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import api from '../api';
+import PaidBadge from '../components/PaidBadge';
 import QRModal from '../components/QRModal';
+import TranscriptBubble from '../components/TranscriptBubble';
+import VoiceCallUI from '../components/VoiceCallUI';
 import { useAgoraVoice } from '../hooks/useAgoraVoice';
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -239,6 +241,10 @@ const parseMessageContent = (content, onShowQr) => {
 function ChatBubble({ message, onShowQr }) {
   const isUser = message.role === 'user';
 
+  if (message.type === 'voice') {
+    return <TranscriptBubble message={message} />;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -293,15 +299,15 @@ function ChatWidget() {
 
   const [isMockMode, setIsMockMode] = useState(false);
   const [qrPayload, setQrPayload] = useState(null);
+  const [paidReceipt, setPaidReceipt] = useState(null);
   const chatEndRef = useRef(null);
-  const rtcClientRef = useRef(null);
-  const localAudioTrackRef = useRef(null);
 
   // ── Voice call via Agora ──────────────────────────────────────────────────
   const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute } = useAgoraVoice(sessionId);
 
   const handleVoiceOrderCreated = useCallback((data) => {
     console.log('[Socket.io] Nhận sự kiện voice_order_created:', data);
+    setPaidReceipt(null);
     setQrPayload({
       qrCodeImage: data.qrCodeImage,
       order: {
@@ -313,8 +319,65 @@ function ChatWidget() {
     });
   }, []);
 
+  const normalizePaidOrder = useCallback((payload = {}) => {
+    const order = payload.order || payload.data || payload;
+
+    return {
+      ...order,
+      id: order.id || order.orderId || payload.orderId || qrPayload?.order?.id,
+      product_name: order.product_name || order.productName || qrPayload?.order?.product_name || 'Don hang ShopTalk',
+      amount: order.amount || qrPayload?.order?.amount || 0,
+      seller_wallet: order.seller_wallet || order.sellerWallet || qrPayload?.order?.seller_wallet,
+      status: 'paid'
+    };
+  }, [qrPayload]);
+
+  const handleTranscriptReceived = useCallback((payload = {}) => {
+    const transcriptSessionId = payload.session_id || payload.sessionId;
+    if (transcriptSessionId && sessionId && transcriptSessionId !== sessionId) return;
+
+    const content = payload.content || payload.transcript || payload.text || payload.message;
+    if (!content) return;
+
+    const sender = payload.sender || payload.role || 'user';
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: payload.id || generateId(),
+        role: sender === 'user' ? 'user' : 'assistant',
+        sender,
+        type: 'voice',
+        content,
+        audio_url: payload.audio_url || payload.audioUrl || null,
+        timestamp: payload.timestamp || new Date().toISOString()
+      }
+    ]);
+  }, [sessionId]);
+
+  const handleOrderPaid = useCallback((payload = {}) => {
+    const paidOrder = normalizePaidOrder(payload);
+    const currentQrOrderId = qrPayload?.order?.id;
+
+    if (!paidOrder.id || !currentQrOrderId || paidOrder.id === currentQrOrderId) {
+      setQrPayload(null);
+    }
+
+    setPaidReceipt(paidOrder);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `paid-${paidOrder.id || Date.now()}`,
+        role: 'assistant',
+        content: `${paidOrder.product_name || 'Don hang ShopTalk'} da thanh toan thanh cong${paidOrder.amount ? ` ${Number(paidOrder.amount).toFixed(2)} USDC` : ''}.`
+      }
+    ]);
+  }, [normalizePaidOrder, qrPayload]);
+
   useWebSocket({
-    voice_order_created: handleVoiceOrderCreated
+    voice_order_created: handleVoiceOrderCreated,
+    transcript_received: handleTranscriptReceived,
+    order_paid: handleOrderPaid
   });
 
   useEffect(() => {
@@ -330,7 +393,7 @@ function ChatWidget() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, isTyping, isEscalated]);
+  }, [messages, isTyping, isEscalated, paidReceipt]);
 
   const subtitle = useMemo(() => (
     isEscalated ? 'Đã chuyển sang nhân viên' : 'AI Sales Agent đang sẵn sàng'
@@ -405,6 +468,7 @@ function ChatWidget() {
 
       if (response.qrCodeImage) {
         const order = await resolveOrderSummary(response.orderId);
+        setPaidReceipt(null);
         setQrPayload({ qrCodeImage: response.qrCodeImage, order });
       }
     } finally {
@@ -424,6 +488,7 @@ function ChatWidget() {
     setMessages(mockMessages);
     setIsEscalated(false);
     setQrPayload(null);
+    setPaidReceipt(null);
     setInputValue('');
   };
 
@@ -468,6 +533,21 @@ function ChatWidget() {
           </div>
         </header>
 
+        <AnimatePresence>
+          {(isInCall || connectionState === 'CONNECTING') && (
+            <VoiceCallUI
+              status={connectionState}
+              isInCall={isInCall}
+              isMuted={isMuted}
+              sessionId={sessionId}
+              language={language}
+              onStartCall={joinChannel}
+              onEndCall={leaveChannel}
+              onToggleMute={toggleMute}
+            />
+          )}
+        </AnimatePresence>
+
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <AnimatePresence initial={false}>
             {messages.map((message) => (
@@ -477,6 +557,7 @@ function ChatWidget() {
                 onShowQr={(qrCodeImage, order) => setQrPayload({ qrCodeImage, order })}
               />
             ))}
+            {paidReceipt && <PaidBadge key={`receipt-${paidReceipt.id || 'latest'}`} order={paidReceipt} />}
           </AnimatePresence>
 
           {isTyping && <TypingIndicator />}
