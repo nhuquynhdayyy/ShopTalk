@@ -60,7 +60,7 @@
 
 ---
 
-## 👤 NGUYỄN NHƯ QUỲNH (Lead Developer & System Architect)
+## 👤 NHƯ QUỲNH (Lead Developer & System Architect)
 ### 🎯 Objective:
 - Thiết kế database, tích hợp các nền tảng quản lý kho, nhúng widget chat/voice lên website/Messenger/Zalo.
 
