@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node src/app.js",
     "migrate": "node src/config/migrate.js",
+    "test:agora": "node test-agora-voice.js",
+    "test:ai": "node test-ai.js",
+    "test:order": "node test-order.js"
     "test:bank": "node test-verify-service.js && node test-verify-nonfinalized.js && node test-order-idempotency.js && node test-order-paid-lock.js && node test-payment-watcher-mismatch.js && node test-payment-watcher-rate-limit.js && node test-expiration-cron.js"
   },
   "dependencies": {

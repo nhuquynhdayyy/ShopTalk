@@ -1,3 +1,4 @@
+import AgoraRTC from 'agora-rtc-sdk-ng';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import api from '../api';
@@ -286,9 +287,16 @@ function ChatWidget() {
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [isEscalated, setIsEscalated] = useState(false);
+  
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [isConnectingVoice, setIsConnectingVoice] = useState(false);
+  const [language, setLanguage] = useState('vi');
+
   const [isMockMode, setIsMockMode] = useState(false);
   const [qrPayload, setQrPayload] = useState(null);
   const chatEndRef = useRef(null);
+  const rtcClientRef = useRef(null);
+  const localAudioTrackRef = useRef(null);
 
   // ── Voice call via Agora ──────────────────────────────────────────────────
   const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute } = useAgoraVoice(sessionId);
@@ -346,7 +354,21 @@ function ChatWidget() {
     setIsTyping(true);
 
     try {
-      let response;
+      // Gửi lên backend API /chat
+      const response = await api.sendChatMessage(userText, sessionId);
+
+      if (response.success) {
+        // Thêm câu trả lời của AI
+        const aiMsgId = crypto.randomUUID();
+        setMessages(prev => [...prev, { 
+          id: aiMsgId, 
+          role: 'assistant', 
+          content: response.reply,
+          qrCodeImage: response.qrCodeImage,
+          orderId: response.orderId,
+          productName: response.productName,
+          amount: response.amount
+        }]);
 
       try {
         response = await api.sendChatMessage(text, sessionId);
@@ -389,6 +411,141 @@ function ChatWidget() {
     }
   };
 
+  const startVoiceChat = async () => {
+    setIsConnectingVoice(true);
+    try {
+      const channelName = `voice_${sessionId}`;
+      console.log(`[Voice] 🎤 Đang kết nối tới channel: ${channelName}`);
+      
+      // Bước 1: Lấy token cho user
+      const tokenData = await api.getAgoraToken(channelName, 1);
+      console.log(`[Voice] 🔑 Đã nhận token từ backend`);
+
+      if (!rtcClientRef.current) {
+        rtcClientRef.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      }
+      const client = rtcClientRef.current;
+
+      // Event handlers (đăng ký trước khi join)
+      client.on("user-joined", (user) => {
+        console.log("🔥 [Agora] Có người vừa tham gia phòng:", user.uid);
+        if (user.uid === 999) {
+          console.log("🤖 [Agora] AI Agent đã vào phòng!");
+        }
+      });
+
+      client.on("user-left", (user) => {
+        console.log("🔥 [Agora] Có người vừa rời phòng:", user.uid);
+        if (user.uid === 999) {
+          console.warn("⚠️ [Agora] AI Agent đã rời phòng!");
+          setMessages(prev => [...prev, {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: '⚠️ Agent đã ngắt kết nối. Bạn có thể kết thúc và gọi lại.'
+          }]);
+        }
+      });
+
+      client.on("user-published", async (user, mediaType) => {
+        console.log(`🔥 [Agora] Nhận được track ${mediaType} từ user ${user.uid}`);
+        try {
+          await client.subscribe(user, mediaType);
+          if (mediaType === "audio") {
+            console.log(`🔊 [Agora] Đang phát âm thanh từ user ${user.uid}...`);
+            user.audioTrack.play();
+            
+            if (user.uid === 999) {
+              setMessages(prev => [...prev, {
+                id: crypto.randomUUID(),
+                role: 'assistant',
+                content: '🎙️ AI Agent đang nói chuyện với bạn...'
+              }]);
+            }
+          }
+        } catch (error) {
+          console.error(`❌ [Agora] Lỗi khi subscribe ${mediaType}:`, error);
+        }
+      });
+
+      client.on("user-unpublished", (user, mediaType) => {
+        console.log(`🔇 [Agora] User ${user.uid} đã ngừng publish ${mediaType}`);
+      });
+
+      client.on("connection-state-change", (curState, prevState) => {
+        console.log(`🔗 [Agora] Connection state: ${prevState} → ${curState}`);
+      });
+
+      // Bước 2: User join channel TRƯỚC
+      console.log(`[Voice] 📡 User đang join channel...`);
+      await client.join(tokenData.appId, channelName, tokenData.token, 1);
+      console.log(`[Voice] ✅ User đã join channel thành công!`);
+
+      // Bước 3: Publish microphone ngay để channel không trống
+      const localTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      localAudioTrackRef.current = localTrack;
+      await client.publish([localTrack]);
+      console.log(`[Voice] 🎤 Đã publish microphone track`);
+
+      // Bước 4: Gọi Agent SAU khi user đã ở trong channel
+      console.log(`[Voice] 🤖 Đang khởi động AI Agent (user đã trong channel)...`);
+      const agentResponse = await api.startAgoraAgent(channelName, language, sessionId);
+      console.log(`[Voice] 🤖 Agent response:`, agentResponse);
+
+      setIsVoiceMode(true);
+      
+      // Thêm thông báo vào chat
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: '🎙️ Kết nối voice thành công! Hãy nói chuyện với em nhé...'
+      }]);
+
+    } catch (error) {
+      console.error("❌ [Voice] Lỗi khi khởi tạo Voice Chat:", error);
+
+      // Cleanup track và client để lần thử lại không bị "already connected"
+      if (localAudioTrackRef.current) {
+        localAudioTrackRef.current.stop();
+        localAudioTrackRef.current.close();
+        localAudioTrackRef.current = null;
+      }
+      if (rtcClientRef.current) {
+        try { await rtcClientRef.current.leave(); } catch (_) {}
+        rtcClientRef.current = null;
+      }
+
+      const detailError = error.response?.data
+        ? JSON.stringify(error.response.data, null, 2)
+        : error.message;
+      alert("Lỗi chi tiết từ Backend/Agora:\n" + detailError);
+
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `⚠️ Không thể kết nối voice chat: ${error.message}`
+      }]);
+    } finally {
+      setIsConnectingVoice(false);
+    }
+  };
+
+  const stopVoiceChat = async () => {
+    try {
+      if (localAudioTrackRef.current) {
+        localAudioTrackRef.current.stop();
+        localAudioTrackRef.current.close();
+        localAudioTrackRef.current = null;
+      }
+      if (rtcClientRef.current) {
+        await rtcClientRef.current.leave();
+        rtcClientRef.current = null; // Reset để lần sau tạo client mới
+      }
+    } catch (error) {
+      console.error("Lỗi khi dừng Voice Chat:", error);
+      rtcClientRef.current = null;
+      localAudioTrackRef.current = null;
+    }
+    setIsVoiceMode(false);
   const handlePromptClick = (prompt) => {
     setInputValue(prompt);
   };
@@ -450,6 +607,24 @@ function ChatWidget() {
           {isEscalated && <StaffHandoff />}
           <div ref={chatEndRef} />
         </div>
+        <div className="flex items-center gap-3">
+          <select 
+            value={language} 
+            onChange={(e) => setLanguage(e.target.value)}
+            disabled={isVoiceMode || isConnectingVoice}
+            className="bg-[#0B0E14] text-xs text-[#8F9CAE] border border-[#243042] rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#5B3FE0]"
+          >
+            <option value="vi">🇻🇳 Tiếng Việt</option>
+            <option value="en">🇺🇸 English</option>
+          </select>
+          <button
+            onClick={handleReset}
+            className="text-xs text-[#8F9CAE] hover:text-[#5B3FE0] bg-[#0B0E14] hover:bg-[#243042] px-3 py-1.5 rounded-lg border border-[#243042] transition-colors"
+          >
+            🔄 Làm mới
+          </button>
+        </div>
+      </div>
 
         {!isEscalated && (
           <div className="border-t border-slate-200 bg-white p-4">
@@ -461,6 +636,30 @@ function ChatWidget() {
                   onClick={() => handlePromptClick(prompt)}
                   className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-teal-300 hover:text-teal-700"
                 >
+                  {msg.content}
+                </div>
+
+                {/* Hiển thị QR Code nếu có */}
+                {msg.role === 'assistant' && msg.qrCodeImage && (
+                  <QRDisplay 
+                    qrCodeImage={msg.qrCodeImage}
+                    amount={msg.amount || 0.1}
+                    productName={msg.productName || "Solana Mobile Saga v2"}
+                    orderId={msg.orderId}
+                  />
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {/* Loading / Typing Animation */}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-[#1C2533] border border-[#243042] px-4 py-3 rounded-2xl rounded-tl-none flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-[#8F9CAE] rounded-full animate-bounce"></span>
+              <span className="w-2 h-2 bg-[#8F9CAE] rounded-full animate-bounce delay-75"></span>
+              <span className="w-2 h-2 bg-[#8F9CAE] rounded-full animate-bounce delay-150"></span>
                   {prompt}
                 </button>
               ))}
@@ -494,37 +693,60 @@ function ChatWidget() {
                 {connectionState === 'CONNECTING' ? '⏳' : isInCall ? (isMuted ? '🔇' : '🎙️') : '📞'}
               </button>
 
-              {/* Nút kết thúc cuộc gọi — chỉ hiện khi đang gọi */}
-              {isInCall && (
-                <button
-                  type="button"
-                  title="Kết thúc cuộc gọi"
-                  onClick={leaveChannel}
-                  className="h-11 w-11 flex-shrink-0 rounded-lg bg-slate-800 text-lg text-white transition hover:bg-slate-900"
-                >
-                  ✖
-                </button>
-              )}
-
-              <button
-                type="submit"
-                disabled={!inputValue.trim() || isTyping}
-                className="h-11 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                Gửi
-              </button>
-            </form>
+{/* Message Input Box - Nhánh feature/ai-agora_vs2 */}
+      <form onSubmit={handleSend} className="p-4 bg-[#1C2533] border-t border-[#243042] flex gap-3">
+        {isVoiceMode ? (
+          <div className="flex-1 flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium text-green-400">Đang trong cuộc gọi Voice...</span>
+            </div>
+            <button
+              type="button"
+              onClick={stopVoiceChat}
+              className="bg-red-500/20 hover:bg-red-500/40 text-red-500 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+            >
+              📴 Kết thúc
+            </button>
           </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={startVoiceChat}
+              disabled={isConnectingVoice || isEscalated}
+              className="bg-[#243042] hover:bg-[#324156] disabled:bg-gray-700 text-white px-4 py-3 rounded-xl text-sm font-medium transition-all active:scale-95 disabled:scale-100 flex items-center justify-center"
+              title="Gọi Voice Chat"
+            >
+              {isConnectingVoice ? "⏳" : "🎤"}
+            </button>
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder={isEscalated ? "Cuộc trò chuyện đã được chuyển cho người thật..." : "Nhập tin nhắn tư vấn / mua hàng tại đây..."}
+              disabled={isEscalated}
+              className="flex-1 bg-[#0B0E14] border border-[#243042] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#5B3FE0] text-[#F0F2F5] disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={!inputValue.trim() || isLoading || isEscalated}
+              className="bg-[#5B3FE0] hover:bg-[#4E34C8] disabled:bg-gray-700 text-white px-5 py-3 rounded-xl text-sm font-medium transition-all active:scale-95 disabled:scale-100 flex items-center justify-center gap-1.5"
+            >
+              Gửi 🚀
+            </button>
+          </>
         )}
-      </section>
+      </form>
+    </div>
 
-      <QRModal
-        isOpen={Boolean(qrPayload)}
-        qrCodeImage={qrPayload?.qrCodeImage}
-        order={qrPayload?.order}
-        onClose={() => setQrPayload(null)}
-      />
-    </>
+    {/* QR Modal - Giữ lại từ nhánh main để hiển thị cửa sổ popup nếu cần */}
+    <QRModal
+      isOpen={Boolean(qrPayload)}
+      qrCodeImage={qrPayload?.qrCodeImage}
+      order={qrPayload?.order}
+      onClose={() => setQrPayload(null)}
+    />
   );
 }
 
