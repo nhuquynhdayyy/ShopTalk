@@ -74,10 +74,12 @@ Hãy trả về một đối tượng JSON duy nhất (không có mã markdown h
 {
   "hasBuyIntent": <true/false, khách hàng đã xác nhận đồng ý/chốt mua hàng>,
   "hasName": <true/false, khách hàng đã cung cấp tên người nhận cụ thể>,
+  "hasPhone": <true/false, khách hàng đã cung cấp số điện thoại liên hệ cụ thể>,
   "hasAddress": <true/false, khách hàng đã cung cấp địa chỉ giao hàng cụ thể>,
   "productName": <tên sản phẩm khách chọn mua, ví dụ "Solana Mobile Saga v2", "Tai nghe TWS Blockchain Edition", hoặc null nếu không rõ>,
   "amount": <giá sản phẩm (number), ví dụ 0.1, 35, hoặc null nếu không rõ>,
   "customerName": <tên người nhận đã cung cấp, hoặc null nếu không rõ>,
+  "customerPhone": <số điện thoại liên hệ đã cung cấp, hoặc null nếu không rõ>,
   "customerAddress": <địa chỉ giao hàng đã cung cấp, hoặc null nếu không rõ>
 }
 
@@ -123,6 +125,7 @@ const fallbackDetectVoiceOrder = (messages) => {
   const hasBuyIntent = allContent.includes('mua') || allContent.includes('đặt hàng') || allContent.includes('chốt') || allContent.includes('chot') || allContent.includes('order');
   
   let customerName = null;
+  let customerPhone = null;
   let customerAddress = null;
   let productName = 'Solana Mobile Saga v2';
   let amount = 0.1;
@@ -152,22 +155,34 @@ const fallbackDetectVoiceOrder = (messages) => {
     const next = messages[i+1];
     if (current.role === 'assistant' && next.role === 'user') {
       const currentLower = current.content.toLowerCase();
-      if (currentLower.includes('tên người nhận') || currentLower.includes('cho em biết tên') || currentLower.includes('xin tên')) {
+      if (currentLower.includes('tên người nhận') || currentLower.includes('cho em biết tên') || currentLower.includes('xin tên') || currentLower.includes('họ và tên')) {
         customerName = next.content.replace(/tên (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
       }
-      if (currentLower.includes('địa chỉ') || currentLower.includes('cho em biết địa chỉ') || currentLower.includes('xin địa chỉ')) {
+      if (currentLower.includes('số điện thoại') || currentLower.includes('sđt') || currentLower.includes('so dien thoai') || currentLower.includes('sdt') || currentLower.includes('liên hệ')) {
+        customerPhone = next.content.replace(/số điện thoại (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+      }
+      if (currentLower.includes('địa chỉ') || currentLower.includes('cho em biết địa chỉ') || currentLower.includes('xin địa chỉ') || currentLower.includes('giao hàng')) {
         customerAddress = next.content.replace(/địa chỉ (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
       }
     }
   }
 
+  // Regex to match a standard 10-digit phone number in Vietnam
+  const phoneRegex = /(0[3|5|7|8|9]+[0-9]{8})\b/;
+  const matchPhone = allContent.match(phoneRegex);
+  if (matchPhone && !customerPhone) {
+    customerPhone = matchPhone[1];
+  }
+
   return {
     hasBuyIntent,
     hasName: !!customerName,
+    hasPhone: !!customerPhone,
     hasAddress: !!customerAddress,
     productName,
     amount,
     customerName,
+    customerPhone,
     customerAddress
   };
 };
@@ -217,11 +232,13 @@ const llmWebhookHandler = async (req, res) => {
   + Sticker Pack Web3: 3 USDC
   + Balo Laptop Crypto: 45 USDC
   + Phantom Wallet Keychain: 6 USDC
-- Hỏi từng thông tin một: hỏi tên trước, sau đó mới hỏi địa chỉ, không hỏi cùng lúc
-- Chờ khách trả lời xong rồi mới phản hồi tiếp
-- Khi khách muốn mua/chốt đơn: hỏi tên người nhận hàng trước: "Dạ anh/chị cho em biết tên người nhận hàng nhé"
-- Sau khi có tên, tiếp tục hỏi địa chỉ nhận hàng: "Dạ anh/chị cho em biết địa chỉ nhận hàng nhé"
-- Khi đã nhận đủ tên và địa chỉ, trợ lý ảo sẽ dừng lại để hệ thống tạo đơn hàng.`
+- Hỏi từng thông tin một, không hỏi cùng lúc: hỏi họ và tên trước, sau đó hỏi số điện thoại, sau đó mới hỏi địa chỉ giao hàng.
+- Chờ khách trả lời xong từng câu rồi mới hỏi thông tin tiếp theo.
+- Quy trình thu thập thông tin khi khách đồng ý mua/chốt đơn:
+  1. Hỏi họ và tên: "Dạ anh/chị cho em xin họ và tên người nhận ạ?"
+  2. Sau khi có tên, hỏi số điện thoại: "Dạ anh/chị cho em xin số điện thoại liên hệ ạ?"
+  3. Sau khi có số điện thoại, hỏi địa chỉ giao hàng: "Dạ anh/chị cho em xin địa chỉ giao hàng ạ?"
+- Khi đã nhận đủ cả 3 thông tin (Họ tên + Số điện thoại + Địa chỉ), Trợ lý ảo sẽ dừng lại để hệ thống tạo đơn hàng.`
     });
 
     // Kiểm tra xem khách đã đặt đơn chưa để tránh duplicate order
@@ -239,13 +256,17 @@ const llmWebhookHandler = async (req, res) => {
           detection.customerName = fallback.customerName;
           detection.hasName = true;
         }
+        if (!detection.customerPhone && fallback.customerPhone) {
+          detection.customerPhone = fallback.customerPhone;
+          detection.hasPhone = true;
+        }
         if (!detection.customerAddress && fallback.customerAddress) {
           detection.customerAddress = fallback.customerAddress;
           detection.hasAddress = true;
         }
       }
 
-      if (detection && detection.hasBuyIntent && detection.hasName && detection.hasAddress) {
+      if (detection && detection.hasBuyIntent && detection.hasName && detection.hasPhone && detection.hasAddress) {
         console.log('[LLM Webhook] Phát hiện đủ thông tin đặt hàng qua voice:', detection);
 
         const { createOrder } = require('../models/order.model');
@@ -256,6 +277,7 @@ const llmWebhookHandler = async (req, res) => {
         const detectedProductName = detection.productName || 'Solana Mobile Saga v2';
         const detectedAmount = detection.amount || 0.1;
         const detectedName = detection.customerName || 'Khách mua qua Voice';
+        const detectedPhone = detection.customerPhone || 'Chưa cung cấp';
         const detectedAddress = detection.customerAddress || 'Chưa cung cấp';
 
         // Tạo đơn hàng
@@ -266,6 +288,7 @@ const llmWebhookHandler = async (req, res) => {
           seller_wallet: process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
           status: 'pending',
           customer_name: detectedName,
+          customer_phone: detectedPhone,
           customer_address: detectedAddress
         });
 
@@ -282,6 +305,8 @@ const llmWebhookHandler = async (req, res) => {
             amount: order.amount,
             qrCodeImage,
             customerName: detectedName,
+            customerPhone: detectedPhone,
+            customerAddress: detectedAddress,
             sellerWallet: order.seller_wallet
           });
           console.log(`[Socket.io] 📢 Đã phát sự kiện 'voice_order_created' cho đơn #${order.id}`);

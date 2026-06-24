@@ -18,8 +18,8 @@ PHỄU BÁN HÀNG 6 BƯỚC (Khung tư duy):
 2. RECOMMEND (Gợi ý): Gọi \`check_inventory\` để tìm sản phẩm. Tuyệt đối không tự bịa sản phẩm.
 3. OBJECTION (Giải quyết phân vân): NẾU khách chê đắt hoặc nghi ngờ, gọi \`get_reviews\` để đưa feedback tốt.
 4. UPSELL (Gợi ý thêm): NẾU khách cần tư vấn thêm, khéo léo gợi ý phụ kiện.
-5. CLOSE (Chốt đơn): KHI KHÁCH ĐỒNG Ý MUA, nhảy thẳng đến bước này. BẮT BUỘC xin Tên và Địa chỉ giao hàng. Có đủ thông tin mới được gọi \`create_order\`.
-6. POST-SALE (Tóm tắt và Sau bán): Khi tạo đơn thành công, BẠN PHẢI TÓM TẮT LẠI thông tin đơn hàng (Tên SP, Tổng tiền, Tên người nhận, Địa chỉ) để khách kiểm tra. Sau đó cảm ơn và mời khách quét mã QR. Dùng \`log_feedback\` nếu có phản hồi.
+5. CLOSE (Chốt đơn): KHI KHÁCH ĐỒNG Ý MUA, nhảy thẳng đến bước này. BẮT BUỘC xin Họ và tên, Số điện thoại liên hệ, và Địa chỉ giao hàng. Có đủ cả 3 thông tin này mới được gọi \`create_order\`.
+6. POST-SALE (Tóm tắt và Sau bán): Khi tạo đơn thành công, BẠN PHẢI TÓM TẮT LẠI thông tin đơn hàng (Tên SP, Tổng tiền, Tên người nhận, Số điện thoại, Địa chỉ) để khách kiểm tra. Sau đó cảm ơn và mời khách quét mã QR. Dùng \`log_feedback\` nếu có phản hồi.
 Quy tắc ứng xử quan trọng:
 1. Luôn lịch sự, xưng hô thân mật phù hợp (ví dụ: dạ, em, anh/chị...).
 2. Chỉ tư vấn và bán các sản phẩm có thực trong kho. TUYỆT ĐỐI không hứa hẹn hoặc giới thiệu các sản phẩm không tồn tại hoặc hết hàng. Luôn dùng công cụ \`check_inventory\` để xác thực trước khi trả lời về giá hoặc số lượng.
@@ -34,7 +34,7 @@ LƯU Ý QUAN TRỌNG:
 
 QUY TẮC LINH HOẠT (QUAN TRỌNG NHẤT):
 - Bạn KHÔNG bắt buộc phải đi tuần tự từ 1 đến 6. 
-- Nếu khách đồng ý mua ở bước 2, hãy BỎ QUA hoàn toàn bước 3 và 4, nhảy thẳng đến bước 5 (Xin Tên và Địa chỉ) ngay lập tức. Đừng lải nhải thêm.
+- Nếu khách đồng ý mua ở bước 2, hãy BỎ QUA hoàn toàn bước 3 và 4, nhảy thẳng đến bước 5 (Xin Tên, Số điện thoại và Địa chỉ) ngay lập tức. Đừng lải nhải thêm.
 
 QUY TẮC CỐT LÕI:
 1. Luôn xưng dạ em, gọi khách là anh/chị. Ngắn gọn, súc tích.
@@ -48,12 +48,12 @@ Your mission is to guide customers using a 6-stage Sales Funnel, but you MUST be
 2. RECOMMEND: Use \`check_inventory\` to find products. Never invent products.
 3. OBJECTION: IF the customer worries about price/quality, use \`get_reviews\` to provide feedback.
 4. UPSELL: IF appropriate, suggest related accessories.
-5. CLOSE: WHEN THE CUSTOMER AGREES TO BUY, jump straight to this step. YOU MUST ask for their Name and Shipping Address. Only call \`create_order\` when you have both.
-6. POST-SALE: Once the order is created, YOU MUST SUMMARIZE the order details (Product Name, Total Amount, Customer Name, Address) for the customer to review. Then thank them and invite them to scan the QR code. Use \`log_feedback\` if they provide feedback.
+5. CLOSE: WHEN THE CUSTOMER AGREES TO BUY, jump straight to this step. YOU MUST ask for their Name, Phone Number, and Shipping Address. Only call \`create_order\` when you have all three.
+6. POST-SALE: Once the order is created, YOU MUST SUMMARIZE the order details (Product Name, Total Amount, Customer Name, Phone Number, Address) for the customer to review. Then thank them and invite them to scan the QR code. Use \`log_feedback\` if they provide feedback.
 
 FLEXIBILITY RULES (MOST IMPORTANT):
 - You DO NOT have to follow steps 1 to 6 sequentially.
-- If the customer agrees to buy at step 2, SKIP steps 3 and 4 entirely. Jump straight to step 5 (Ask for Name and Address) immediately. Do not ramble.
+- If the customer agrees to buy at step 2, SKIP steps 3 and 4 entirely. Jump straight to step 5 (Ask for Name, Phone Number, and Address) immediately. Do not ramble.
 
 CORE RULES:
 1. Always be polite, professional, and concise.
@@ -125,6 +125,7 @@ const executeTool = async (name, args) => {
           seller_wallet: sellerWallet,
           status: 'pending',
           customer_name: args.customer_name || null,
+          customer_phone: args.customer_phone || null,
           customer_address: args.customer_address || null,
           items_list: args.items_list || null
         });
@@ -798,7 +799,10 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
         product_name: productName,
         amount: amount,
         seller_wallet: process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
-        status: 'pending'
+        status: 'pending',
+        customer_name: 'Mock Customer',
+        customer_phone: '0987654321',
+        customer_address: 'Mock Address'
       });
       orderId = newOrder.id;
 

@@ -189,7 +189,10 @@ const parseMessageContent = (content, onShowQr) => {
                   id: orderId,
                   product_name: productName,
                   amount: orderAmount,
-                  seller_wallet: sellerWallet
+                  seller_wallet: sellerWallet,
+                  customer_name: args.customer_name,
+                  customer_phone: args.customer_phone,
+                  customer_address: args.customer_address
                 })}
                 className="h-8 rounded bg-teal-600 px-3 text-xs font-semibold text-white transition hover:bg-teal-700"
               >
@@ -308,7 +311,10 @@ function ChatWidget() {
         id: data.orderId,
         product_name: data.productName,
         amount: data.amount,
-        seller_wallet: data.sellerWallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ'
+        seller_wallet: data.sellerWallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
+        customer_name: data.customerName,
+        customer_phone: data.customerPhone,
+        customer_address: data.customerAddress
       }
     });
   }, []);
