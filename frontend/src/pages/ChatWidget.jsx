@@ -44,17 +44,33 @@ function ChatWidget() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // Lắng nghe tín hiệu bắn mã QR từ Voice AI Proxy
+  // Lắng nghe tín hiệu bắn mã QR từ MCP Server
   useEffect(() => {
-    const socket = io(api.API_BASE_URL || 'http://localhost:5000', { transports: ['websocket', 'polling'] });
+    const socket = io(api.API_BASE_URL || 'http://localhost:3000', { transports: ['websocket', 'polling'] });
 
     socket.on('show_qr_code', (data) => {
-      // Chỉ nhận QR code nếu đúng sessionId của tab này
-      if (data.sessionId === sessionStorage.getItem('shoptalk_session_id')) {
+      // Chỉ nhận QR code nếu đúng sessionId của tab này hoặc "default"
+      if (data.sessionId === sessionStorage.getItem('shoptalk_session_id') || data.sessionId === "default") {
+        
+        let productText = `- **Sản phẩm:** ${data.productName}`;
+        if (data.itemsList && Array.isArray(data.itemsList) && data.itemsList.length > 0) {
+           productText = `- **Danh sách sản phẩm:**\n` + data.itemsList.map(item => `  + ${item.quantity}x ${item.name} (${item.price} USDC)`).join('\n');
+        }
+
+        const orderDetails = `Dạ vâng ạ, em đã lên đơn thành công! Dưới đây là thông tin đơn hàng của anh/chị:
+        
+- **Mã đơn hàng:** \`${data.orderId}\`
+- **Tên người nhận:** ${data.customerName || 'Khách hàng'}
+- **Địa chỉ giao hàng:** ${data.customerAddress || 'Chưa cung cấp'}
+${productText}
+- **Tổng tiền:** ${data.amount} USDC
+
+Anh/chị vui lòng kiểm tra lại thông tin và quét mã QR bên dưới bằng ví Phantom/Solflare để thanh toán nhé!`;
+
         setMessages(prev => [...prev, {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: 'Dạ vâng ạ, em đã lên đơn thành công và gửi mã QR thanh toán vào khung chat. Anh chị vui lòng kiểm tra và quét mã bằng ví Phantom nhé!',
+          content: orderDetails,
           qrCodeImage: data.qrCodeImage,
           orderId: data.orderId,
           productName: data.productName,
@@ -157,14 +173,6 @@ function ChatWidget() {
           if (mediaType === "audio") {
             console.log(`🔊 [Agora] Đang phát âm thanh từ user ${user.uid}...`);
             user.audioTrack.play();
-
-            if (user.uid === 999) {
-              setMessages(prev => [...prev, {
-                id: crypto.randomUUID(),
-                role: 'assistant',
-                content: '🎙️ AI Agent đang nói chuyện với bạn...'
-              }]);
-            }
           }
         } catch (error) {
           console.error(`❌ [Agora] Lỗi khi subscribe ${mediaType}:`, error);

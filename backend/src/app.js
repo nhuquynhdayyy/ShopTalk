@@ -22,7 +22,13 @@ app.use(cors({
   origin: '*', // Cho phép gọi API xuyên miền (CORS) phục vụ cho Frontend
   methods: ['GET', 'POST']
 })); 
-app.use(express.json()); // Hỗ trợ đọc dữ liệu JSON gửi lên trong req.body
+app.use((req, res, next) => {
+  if (req.path === '/mcp/messages') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+}); // Hỗ trợ đọc dữ liệu JSON gửi lên trong req.body, ngoại trừ /mcp/messages
 
 // Đăng ký route quản lý đơn hàng
 app.use('/orders', ordersRouter);
