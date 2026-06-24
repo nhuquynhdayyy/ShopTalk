@@ -309,6 +309,12 @@ const llmWebhookHandler = async (req, res) => {
           customer_address: detectedAddress
         });
 
+        if (order && sessionId) {
+          const { orderSessions } = require('../services/ai.service');
+          orderSessions.set(order.id, sessionId);
+          console.log(`[Agora Webhook] Mapped voice order ID ${order.id} to session ID ${sessionId}`);
+        }
+
         const paymentUrl = createPaymentRequest(order);
         const qrCodeImage = await generateQRCode(paymentUrl);
 

@@ -12,7 +12,7 @@ const mockMessages = [
   {
     id: 'mock-welcome',
     role: 'assistant',
-    content: 'Xin chào, mình là ShopTalk. Bạn có thể hỏi sản phẩm, so sánh lựa chọn hoặc nhắn "mua" để mình tạo mã thanh toán USDC.'
+    content: 'Dạ, ShopTalk xin chào anh/chị! Em là nhân viên tư vấn ảo của cửa hàng. Anh chị đang quan tâm đến mẫu điện thoại Solana Saga hay phụ kiện nào bên em ạ?'
   }
 ];
 
@@ -257,11 +257,10 @@ function ChatBubble({ message, onShowQr }) {
       className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
     >
       <div
-        className={`max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm ${
-          isUser
+        className={`max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm ${isUser
             ? 'rounded-br-sm bg-teal-600 text-white'
             : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
-        }`}
+          }`}
       >
         {isUser ? message.content : parseMessageContent(message.content, onShowQr)}
       </div>
@@ -297,7 +296,7 @@ function ChatWidget() {
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [isEscalated, setIsEscalated] = useState(false);
-  
+
   const [language, setLanguage] = useState('vi');
 
   const [isMockMode, setIsMockMode] = useState(false);
@@ -533,8 +532,8 @@ function ChatWidget() {
                   Mock data
                 </span>
               )}
-              <select 
-                value={language} 
+              <select
+                value={language}
                 onChange={(e) => setLanguage(e.target.value)}
                 disabled={isInCall || connectionState === 'CONNECTING'}
                 className="bg-white text-xs text-slate-700 border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-teal-500"
@@ -587,6 +586,21 @@ function ChatWidget() {
 
         {!isEscalated && (
           <div className="border-t border-slate-200 bg-white p-4">
+            {qrPayload && (
+              <div className="mb-3 flex items-center justify-between rounded-lg bg-teal-50 border border-teal-100 px-4 py-2.5 text-teal-800 text-xs font-medium animate-pulse">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-teal-500 animate-ping" />
+                  <span>AI đang đợi bạn thanh toán đơn hàng "{qrPayload.order?.product_name || 'Sản phẩm'}"...</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQrPayload(null)}
+                  className="text-teal-600 hover:text-teal-800 font-semibold transition"
+                >
+                  Đóng QR
+                </button>
+              </div>
+            )}
             <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
               {suggestedPrompts.map((prompt) => (
                 <button
@@ -619,10 +633,10 @@ function ChatWidget() {
                   connectionState === 'CONNECTING'
                     ? 'cursor-not-allowed bg-slate-200 text-slate-400 animate-pulse'
                     : isInCall && !isMuted
-                    ? 'bg-red-500 text-white shadow-lg shadow-red-200 hover:bg-red-600'
-                    : isInCall && isMuted
-                    ? 'bg-amber-400 text-white hover:bg-amber-500'
-                    : 'border border-slate-200 bg-white text-slate-600 hover:border-teal-400 hover:text-teal-600'
+                      ? 'bg-red-500 text-white shadow-lg shadow-red-200 hover:bg-red-600'
+                      : isInCall && isMuted
+                        ? 'bg-amber-400 text-white hover:bg-amber-500'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:border-teal-400 hover:text-teal-600'
                 ].join(' ')}
               >
                 {connectionState === 'CONNECTING' ? '⏳' : isInCall ? (isMuted ? '🔇' : '🎙️') : '📞'}

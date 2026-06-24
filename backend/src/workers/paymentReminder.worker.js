@@ -33,6 +33,28 @@ const runPaymentReminderSweep = async (minutesWaiting = REMINDER_AFTER_MINUTES) 
         timestamp: new Date().toISOString(),
       });
       remindedCount += 1;
+
+      // Trigger AI voice remind
+      try {
+        const { orderSessions, triggerAgentSpeak } = require('../services/ai.service');
+        const sessionId = orderSessions.get(updatedOrder.id);
+        if (sessionId) {
+          const reminderText = 'Bạn ơi, mình vẫn chưa thấy thông báo chuyển khoản, bạn có gặp khó khăn gì khi quét mã không?';
+          await triggerAgentSpeak(sessionId, reminderText);
+
+          // Emit transcript_received to UI
+          const { emitTranscriptReceived } = require('../websocket/socket.server');
+          emitTranscriptReceived({
+            sessionId,
+            sender: 'assistant',
+            transcript: reminderText,
+            type: 'voice',
+            id: 'ai-reminder-' + Date.now()
+          });
+        }
+      } catch (err) {
+        console.error('[PaymentReminder] Lỗi khi trigger AI nói nhắc nhở:', err.message);
+      }
     }
 
     return { skipped: false, remindedCount };

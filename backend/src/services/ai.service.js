@@ -38,7 +38,9 @@ QUY TẮC LINH HOẠT (QUAN TRỌNG NHẤT):
 
 QUY TẮC CỐT LÕI:
 1. Luôn xưng dạ em, gọi khách là anh/chị. Ngắn gọn, súc tích.
-2. Luôn nhắc khách thanh toán bằng USDC trên mạng Solana Devnet.`;
+2. Luôn nhắc khách thanh toán bằng USDC trên mạng Solana Devnet.
+3. Sau khi đã gọi tool tạo mã QR thanh toán (hoặc khi QR đã hiển thị), AI phải tuyệt đối im lặng và không được đặt thêm bất kỳ câu hỏi nào. Hãy để khách hàng tập trung thao tác chuyển khoản.
+4. AI chỉ được nói tiếp khi nhận được tín hiệu order_paid (thành công) hoặc tín hiệu payment_reminder (nhắc nhở).`;
 
 const SYSTEM_PROMPT_EN = `You are a smart AI Sales Agent for the "ShopTalk" store.
 Your mission is to guide customers using a 6-stage Sales Funnel, but you MUST be HIGHLY FLEXIBLE based on the actual situation:
@@ -57,11 +59,19 @@ FLEXIBILITY RULES (MOST IMPORTANT):
 
 CORE RULES:
 1. Always be polite, professional, and concise.
-2. Remind customers that payments are in USDC on the Solana Devnet.`;
+2. Remind customers that payments are in USDC on the Solana Devnet.
+3. After calling the tool to generate the payment QR code (or when the QR code is displayed), the AI must remain absolutely silent and must not ask any further questions. Let the customer focus on the transaction.
+4. The AI is only allowed to speak again when it receives the order_paid signal (success) or the payment_reminder signal.`;
 
 // ─── State: Lưu trữ lịch sử hội thoại (Context) ──────────────────────────────────
 // Map lưu trữ: sessionId -> Array of messages
 const chatSessions = new Map();
+
+// Map lưu trữ: sessionId -> agentId
+const activeAgoraAgents = new Map();
+
+// Map lưu trữ: orderId -> sessionId
+const orderSessions = new Map();
 
 /**
  * Lấy lịch sử tin nhắn của một phiên chat, khởi tạo nếu chưa có
@@ -92,7 +102,7 @@ const OPENAI_TOOLS = [
 
 // ─── Logic thực thi các công cụ (Tool Execution) ───────────────────────────
 
-const executeTool = async (name, args) => {
+const executeTool = async (name, args, sessionId = null) => {
   console.log(`[AI Agent] 🛠️ Thực thi tool: ${name} với tham số:`, args);
   try {
     switch (name) {
@@ -129,6 +139,11 @@ const executeTool = async (name, args) => {
           customer_address: args.customer_address || null,
           items_list: args.items_list || null
         });
+
+        if (newOrder && sessionId) {
+          orderSessions.set(newOrder.id, sessionId);
+          console.log(`[Order Map] Mapped order ID ${newOrder.id} to session ID ${sessionId}`);
+        }
 
         // Sinh luôn mã QR Code thanh toán Solana Pay để đính kèm vào dữ liệu phản hồi
         const paymentUrl = createPaymentRequest(newOrder);
@@ -401,7 +416,7 @@ const chat = async (sessionId, userMessage) => {
   // Nếu không có API Key, chạy chế độ Mock/Sandbox tự động để demo hoạt động không bị crash
   if (!apiKey) {
     console.warn('[AI Agent] ⚠️ Cảnh báo: Không tìm thấy GROQ_API_KEY, OPENAI_API_KEY hoặc LLM_API_KEY. Khởi chạy chế độ Mock để demo...');
-    return mockChatFlow(sessionMessages, userMessage);
+    return mockChatFlow(sessionMessages, userMessage, sessionId);
   }
 
   try {
@@ -443,7 +458,7 @@ const chat = async (sessionId, userMessage) => {
         const args = JSON.parse(toolCall.function.arguments);
 
         // Thực thi tool
-        const toolResult = await executeTool(name, args);
+        const toolResult = await executeTool(name, args, sessionId);
 
         // Lưu thông tin phục vụ trả về trực tiếp cho UI nếu có
         let cleanToolResultStr = toolResult;
@@ -685,6 +700,12 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
     console.log(`[Agora] 📥 Agent ID: ${data.agent_id}`);
     console.log(`[Agora] 📥 Status: ${data.status}`);
 
+    if (data.agent_id) {
+      const finalSessionId = sessionId || channelName;
+      activeAgoraAgents.set(finalSessionId, data.agent_id);
+      console.log(`[Agora Map] Mapped session ID ${finalSessionId} to Agent ID ${data.agent_id}`);
+    }
+
     return { success: true, agentName, data };
 
   } catch (error) {
@@ -698,7 +719,7 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
  * Xử lý hội thoại demo hoàn toàn offline — không cần DB, Blockchain hay API Key.
  * Dùng createMockOrder() để tạo đơn giả, trả về QR ảnh giả trông như thật.
  */
-const mockChatFlow = async (sessionMessages, userMessage) => {
+const mockChatFlow = async (sessionMessages, userMessage, sessionId = null) => {
   const lowercaseMsg = userMessage.toLowerCase();
   let reply = '';
   let qrCodeImage = null;
@@ -805,6 +826,10 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
         customer_address: 'Mock Address'
       });
       orderId = newOrder.id;
+      if (sessionId) {
+        orderSessions.set(newOrder.id, sessionId);
+        console.log(`[Mock Chat] Mapped real order ID ${newOrder.id} to session ID ${sessionId}`);
+      }
 
       // Sinh luôn mã QR Code thanh toán
       const paymentUrl = createPaymentRequest(newOrder);
@@ -823,6 +848,10 @@ Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng dùng 
         const mockOrder = createMockOrder(productName, amount);
         orderId = mockOrder.id;
         qrCodeImage = mockOrder.qr_code;
+        if (sessionId) {
+          orderSessions.set(mockOrder.id, sessionId);
+          console.log(`[Mock Chat] Mapped mock order ID ${mockOrder.id} to session ID ${sessionId}`);
+        }
 
         reply = `Dạ em đã tạo đơn hàng thành công cho anh/chị rồi ạ! 🎉
 
@@ -883,6 +912,57 @@ Anh/chị cần em hỗ trợ gì ạ? 😊`;
   };
 };
 
+const triggerAgentSpeak = async (sessionId, text) => {
+  try {
+    const agentId = activeAgoraAgents.get(sessionId);
+    if (!agentId) {
+      console.warn(`[Agora] Không tìm thấy agentId cho sessionId: ${sessionId}, không thể phát tiếng nói.`);
+      return false;
+    }
+
+    const appId = process.env.AGORA_APP_ID;
+    const customerId = process.env.AGORA_CUSTOMER_ID;
+    const customerSecret = process.env.AGORA_CUSTOMER_SECRET;
+    
+    if (!appId || !customerId || !customerSecret) {
+      console.warn('[Agora] Thiếu cấu hình credentials, không thể gọi speak API.');
+      return false;
+    }
+
+    const credentials = Buffer.from(`${customerId}:${customerSecret}`).toString('base64');
+    
+    console.log(`[Agora Speak] Gửi yêu cầu speak đến Agent ${agentId} cho session ${sessionId}: "${text}"`);
+    
+    const response = await fetch(
+      `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/agents/${agentId}/speak`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text,
+          priority: 'INTERRUPT',
+          interruptable: true
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.text();
+      console.error('[Agora Speak] Lỗi API speak:', errData);
+      return false;
+    }
+
+    console.log('[Agora Speak] Kích hoạt Agent phát tiếng nói thành công.');
+    return true;
+  } catch (error) {
+    console.error('[Agora Speak] Exception:', error.message);
+    return false;
+  }
+};
+
 module.exports = {
   groq,
   chat,
@@ -891,5 +971,8 @@ module.exports = {
   createMockOrder,
   SYSTEM_PROMPT,
   OPENAI_TOOLS,
-  executeTool
+  executeTool,
+  orderSessions,
+  activeAgoraAgents,
+  triggerAgentSpeak
 };
