@@ -7,7 +7,7 @@ module.exports = {
   type: "function",
   function: {
     name: "check_inventory",
-    description: "Kiểm tra tồn kho và giá bán của một sản phẩm từ database.",
+    description: "Kiểm tra tồn kho, giá bán, và lấy chi tiết sản phẩm (selling points, description, size, color) để tư vấn.",
     parameters: {
       type: "object",
       properties: {

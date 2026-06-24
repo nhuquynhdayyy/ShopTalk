@@ -9,55 +9,35 @@ const axios = require('axios');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
 const { getIo } = require('../websocket/socket.server');
+const fs = require('fs');
+const path = require('path');
 
-const SYSTEM_PROMPT = `Bạn là trợ lý bán hàng (Sales Agent) AI thông minh của cửa hàng "ShopTalk".
-Nhiệm vụ của bạn là tư vấn dựa trên Phễu bán hàng 6 bước (Sales Funnel Stages), nhưng phải CỰC KỲ LINH HOẠT tùy theo tình huống thực tế:
+// Load SYSTEM_PROMPT từ file system-prompt.md (cho text chat)
+let SYSTEM_PROMPT = '';
+try {
+  const promptPath = path.join(__dirname, '../../../ai-agent/prompts/system-prompt.md');
+  SYSTEM_PROMPT = fs.readFileSync(promptPath, 'utf-8');
+  console.log('[AI Agent] ✅ Đã load System Prompt (Text) từ file system-prompt.md');
+} catch (error) {
+  console.error('[AI Agent] ❌ Lỗi khi đọc file system-prompt.md:', error.message);
+  // Fallback prompt đơn giản nếu không đọc được file
+  SYSTEM_PROMPT = `Bạn là trợ lý bán hàng AI thông minh của cửa hàng "ShopTalk".
+Nhiệm vụ của bạn là tư vấn sản phẩm, giải đáp thắc mắc và hỗ trợ khách hàng đặt hàng.
+Luôn lịch sự, xưng "em", gọi khách là "anh/chị".`;
+}
 
-PHỄU BÁN HÀNG 6 BƯỚC (Khung tư duy):
-1. QUALIFY (Hỏi nhu cầu): Chào hỏi, tìm hiểu mong muốn của khách.
-2. RECOMMEND (Gợi ý): Gọi \`check_inventory\` để tìm sản phẩm. Tuyệt đối không tự bịa sản phẩm.
-3. OBJECTION (Giải quyết phân vân): NẾU khách chê đắt hoặc nghi ngờ, gọi \`get_reviews\` để đưa feedback tốt.
-4. UPSELL (Gợi ý thêm): NẾU khách cần tư vấn thêm, khéo léo gợi ý phụ kiện.
-5. CLOSE (Chốt đơn): KHI KHÁCH ĐỒNG Ý MUA, nhảy thẳng đến bước này. BẮT BUỘC xin Tên và Địa chỉ giao hàng. Có đủ thông tin mới được gọi \`create_order\`.
-6. POST-SALE (Tóm tắt và Sau bán): Khi tạo đơn thành công, BẠN PHẢI TÓM TẮT LẠI thông tin đơn hàng (Tên SP, Tổng tiền, Tên người nhận, Địa chỉ) để khách kiểm tra. Sau đó cảm ơn và mời khách quét mã QR. Dùng \`log_feedback\` nếu có phản hồi.
-Quy tắc ứng xử quan trọng:
-1. Luôn lịch sự, xưng hô thân mật phù hợp (ví dụ: dạ, em, anh/chị...).
-2. Chỉ tư vấn và bán các sản phẩm có thực trong kho. TUYỆT ĐỐI không hứa hẹn hoặc giới thiệu các sản phẩm không tồn tại hoặc hết hàng. Luôn dùng công cụ \`check_inventory\` để xác thực trước khi trả lời về giá hoặc số lượng.
-3. Khi khách đồng ý mua, hãy hỏi rõ thông tin (tên sản phẩm, số lượng, địa chỉ ví nhận nếu cần) và gọi công cụ \`create_order\` để tạo đơn hàng.
-4. Sau khi tạo đơn hàng thành công, gọi ngay công cụ \`generate_payment_qr\` để lấy ảnh QR Code thanh toán Solana Pay, hiển thị thông tin này cho khách hàng và hướng dẫn họ dùng ví Phantom/Solflare (đã chuyển sang mạng Devnet) quét mã để hoàn tất.
-5. Luôn nhắc nhở khách rằng giao dịch được thanh toán bằng đồng USDC trên mạng Solana Devnet.
-6. Bạn là AI Agent bán hàng chính thức. TUYỆT ĐỐI không được chủ động giới thiệu, đề xuất khách hàng liên hệ nhân viên hỗ trợ hoặc tự ý chuyển giao cuộc nói chuyện sang người thật trừ khi khách hàng trực tiếp yêu cầu từ khóa khiếu nại hoặc trực tiếp đòi gặp người thật. Nếu khách hàng hỏi mua sản phẩm hoặc hỏi các câu thông thường, hãy kiên trì tư vấn và hướng dẫn đặt hàng.
-
-LƯU Ý QUAN TRỌNG: 
-- Khi gọi 'create_order', bạn phải tự lấy tên sản phẩm và giá tiền (amount) từ thông tin bạn đã kiểm tra trước đó trong lịch sử trò chuyện.
-- Nếu người dùng đồng ý mua (nói "có", "mua luôn"...), hãy thực hiện gọi 'create_order' ngay lập tức với các thông số đã biết.
-
-QUY TẮC LINH HOẠT (QUAN TRỌNG NHẤT):
-- Bạn KHÔNG bắt buộc phải đi tuần tự từ 1 đến 6. 
-- Nếu khách đồng ý mua ở bước 2, hãy BỎ QUA hoàn toàn bước 3 và 4, nhảy thẳng đến bước 5 (Xin Tên và Địa chỉ) ngay lập tức. Đừng lải nhải thêm.
-
-QUY TẮC CỐT LÕI:
-1. Luôn xưng dạ em, gọi khách là anh/chị. Ngắn gọn, súc tích.
-2. Luôn nhắc khách thanh toán bằng USDC trên mạng Solana Devnet.`;
-
-const SYSTEM_PROMPT_EN = `You are a smart AI Sales Agent for the "ShopTalk" store.
-Your mission is to guide customers using a 6-stage Sales Funnel, but you MUST be HIGHLY FLEXIBLE based on the actual situation:
-
-6-STAGE SALES FUNNEL (Mental Framework):
-1. QUALIFY: Greet and understand customer needs.
-2. RECOMMEND: Use \`check_inventory\` to find products. Never invent products.
-3. OBJECTION: IF the customer worries about price/quality, use \`get_reviews\` to provide feedback.
-4. UPSELL: IF appropriate, suggest related accessories.
-5. CLOSE: WHEN THE CUSTOMER AGREES TO BUY, jump straight to this step. YOU MUST ask for their Name and Shipping Address. Only call \`create_order\` when you have both.
-6. POST-SALE: Once the order is created, YOU MUST SUMMARIZE the order details (Product Name, Total Amount, Customer Name, Address) for the customer to review. Then thank them and invite them to scan the QR code. Use \`log_feedback\` if they provide feedback.
-
-FLEXIBILITY RULES (MOST IMPORTANT):
-- You DO NOT have to follow steps 1 to 6 sequentially.
-- If the customer agrees to buy at step 2, SKIP steps 3 and 4 entirely. Jump straight to step 5 (Ask for Name and Address) immediately. Do not ramble.
-
-CORE RULES:
-1. Always be polite, professional, and concise.
-2. Remind customers that payments are in USDC on the Solana Devnet.`;
+// Load SYSTEM_PROMPT_VOICE từ file system-prompt-voice.md (cho voice agent)
+let SYSTEM_PROMPT_VOICE = '';
+try {
+  const promptVoicePath = path.join(__dirname, '../../../ai-agent/prompts/system-prompt-voice.md');
+  SYSTEM_PROMPT_VOICE = fs.readFileSync(promptVoicePath, 'utf-8');
+  console.log('[AI Agent] ✅ Đã load System Prompt (Voice) từ file system-prompt-voice.md');
+} catch (error) {
+  console.error('[AI Agent] ❌ Lỗi khi đọc file system-prompt-voice.md:', error.message);
+  // Fallback: dùng prompt text nếu không có voice prompt
+  SYSTEM_PROMPT_VOICE = SYSTEM_PROMPT;
+  console.warn('[AI Agent] ⚠️ Fallback: Dùng text prompt cho voice agent');
+}
 
 // ─── State: Lưu trữ lịch sử hội thoại (Context) ──────────────────────────────────
 // Map lưu trữ: sessionId -> Array of messages
@@ -86,13 +66,13 @@ const OPENAI_TOOLS = [
   checkInventoryTool,
   createOrderTool,
   generatePaymentQRTool,
-  getReviewsTool,
-  logFeedbackTool
+  getReviewsTool.definition || getReviewsTool,
+  logFeedbackTool.definition || logFeedbackTool
 ];
 
 // ─── Logic thực thi các công cụ (Tool Execution) ───────────────────────────
 
-const executeTool = async (name, args) => {
+const executeTool = async (name, args, sessionId) => {
   console.log(`[AI Agent] 🛠️ Thực thi tool: ${name} với tham số:`, args);
   try {
     switch (name) {
@@ -109,6 +89,10 @@ const executeTool = async (name, args) => {
           name: product.name,
           price_usdc: product.price_usdc,
           stock: product.stock,
+          description: product.description,
+          selling_points: product.selling_points,
+          size_options: product.size_options,
+          color_options: product.color_options,
           message: `Sản phẩm "${product.name}" còn ${product.stock} chiếc trong kho với giá ${product.price_usdc} USDC.`
         });
       }
@@ -169,27 +153,18 @@ const executeTool = async (name, args) => {
       }
 
       case 'get_reviews': {
-        console.log(`[AI Agent] 🔍 Lấy đánh giá cho sản phẩm: "${args.product_name}"`);
-        const mockReviews = [
-          { user: "Quỳnh Như", rating: 5, comment: "Sản phẩm xịn lắm ạ, dùng rất mượt và giao hàng siêu nhanh!" },
-          { user: "Hải Nam", rating: 5, comment: "Đáng tiền nha mọi người, dịch vụ chăm sóc khách hàng của shop rất tốt." },
-          { user: "Minh Thư", rating: 4, comment: "Đóng gói kỹ càng, chất lượng chuẩn chỉnh như mô tả." }
-        ];
-        return JSON.stringify({
-          success: true,
-          product_name: args.product_name,
-          reviews: mockReviews,
-          message: `Đã tìm thấy ${mockReviews.length} đánh giá tích cực từ khách hàng cho sản phẩm "${args.product_name}".`
-        });
+        console.log(`[AI Agent] 🔍 Lấy đánh giá cho sản phẩm: "${args.product_sku || args.product_name}"`);
+        // Fallback to product_name if product_sku is missing
+        const sku = args.product_sku || args.product_name; 
+        const result = await getReviewsTool.handler({ product_sku: sku, limit: args.limit, min_rating: args.min_rating });
+        return JSON.stringify(result);
       }
 
       case 'log_feedback': {
-        console.log(`[AI Agent] 📝 Ghi nhận phản hồi cho đơn hàng: "${args.order_id || 'N/A'}" | Nội dung: "${args.feedback_text}"`);
-        return JSON.stringify({
-          success: true,
-          order_id: args.order_id || null,
-          message: "Cảm ơn ý kiến đóng góp quý báu của anh/chị! Shop đã ghi nhận phản hồi và sẽ liên tục cải tiến dịch vụ ạ. ❤️"
-        });
+        args.session_id = args.session_id || sessionId || 'unknown';
+        console.log(`[AI Agent] 📝 Ghi nhận phản hồi session: "${args.session_id}" | Nội dung: "${args.content}"`);
+        const result = await logFeedbackTool.handler(args);
+        return JSON.stringify(result);
       }
 
       default:
@@ -442,7 +417,7 @@ const chat = async (sessionId, userMessage) => {
         const args = JSON.parse(toolCall.function.arguments);
 
         // Thực thi tool
-        const toolResult = await executeTool(name, args);
+        const toolResult = await executeTool(name, args, sessionId);
 
         // Lưu thông tin phục vụ trả về trực tiếp cho UI nếu có
         let cleanToolResultStr = toolResult;
@@ -629,9 +604,9 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
           url: `${ngrokUrl}/api/agora/llm-webhook`,
           params: { model: 'llama-3.1-8b-instant' },
           failure_message: 'Dạ, em xin lỗi, đường truyền đang gặp chút vấn đề. Anh chị vui lòng đợi em một xíu ạ.',
-          greeting_message: 'Dạ, ShopTalk xin chào anh/chị! Em là nhân viên tư vấn ảo của cửa hàng. Anh chị đang quan tâm đến mẫu điện thoại Solana Saga hay phụ kiện nào bên em ạ?',
+          greeting_message: 'Dạ, ShopTalk xin chào anh/chị! Em là Mia, nhân viên tư vấn thời trang của shop. Hôm nay anh chị đang tìm kiểu gì ạ — đi chơi, đi làm, hay mặc nhà?',
           system_messages: [
-            { role: 'system', content: SYSTEM_PROMPT }
+            { role: 'system', content: SYSTEM_PROMPT_VOICE }
           ]
         },
         tts: {
@@ -886,6 +861,7 @@ module.exports = {
   startAgoraAgent,
   createMockOrder,
   SYSTEM_PROMPT,
+  SYSTEM_PROMPT_VOICE,
   OPENAI_TOOLS,
   executeTool
 };
