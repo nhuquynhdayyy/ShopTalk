@@ -114,7 +114,7 @@ const updateOrderStatus = async (id, status, txSignature = null) => {
 
   const queryText = `
     UPDATE orders 
-    SET status = $2, tx_signature = COALESCE($3, tx_signature)
+    SET status = $2, tx_signature = COALESCE($3::varchar, tx_signature)
     WHERE id = $1
       AND status <> 'paid'
       AND (
@@ -122,9 +122,9 @@ const updateOrderStatus = async (id, status, txSignature = null) => {
         OR status IN ('pending', 'payment_mismatch')
       )
       AND (
-        $3 IS NULL
+        $3::varchar IS NULL
         OR tx_signature IS NULL
-        OR tx_signature = $3
+        OR tx_signature = $3::varchar
       )
     RETURNING *;
   `;
