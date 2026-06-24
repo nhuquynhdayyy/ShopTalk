@@ -1,150 +1,180 @@
-# ShopTalk - Trợ lý bán hàng AI & Tích hợp thanh toán Solana
+# ShopTalk 💬💸
 
-**ShopTalk** là giải pháp AI Sales Agent đột phá được thiết kế dành riêng cho các tiểu thương bán hàng trực tuyến. Hệ thống kết hợp khả năng tư vấn, chăm sóc khách hàng tự nhiên bằng AI thế hệ mới với công nghệ thanh toán Web3 thông qua cổng thanh toán **Solana Pay**. Giải pháp giúp tự động hóa hoàn toàn quy trình từ khâu tư vấn, kiểm tra tồn kho, tạo đơn hàng, đối soát thanh toán trực tiếp trên Blockchain, cho tới mô phỏng rút tiền về tài khoản ngân hàng Việt Nam (Off-ramp) thời gian thực.
+### *AI Sales Agent cho tiểu thương online - Trải nghiệm mua sắm bằng giọng nói & Thanh toán Solana Pay chớp mắt*
+
+[![Solana Pay](https://img.shields.io/badge/Solana_Pay-USDC_Devnet-9945FF?style=for-the-badge&logo=solana&logoColor=white)](https://solana.com)
+[![Agora Voice](https://img.shields.io/badge/Agora_RTC-Voice_Call-009FDE?style=for-the-badge&logo=agora&logoColor=white)](https://www.agora.io)
+[![Groq AI](https://img.shields.io/badge/Groq_Cloud-Llama_3.3_70B-F55036?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com)
+[![Node.js](https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
 
 ---
 
-## 🌟 Tính năng nổi bật
+## 📌 Bài toán & Giải pháp (Problem & Solution)
 
-*   💬 **Trợ lý ảo bán hàng (AI Sales Agent):** Tư vấn sản phẩm, tra kho hàng thời gian thực, tự động lên đơn hàng thông qua cơ chế gọi công cụ thông minh (Tool/Function Calling) của LLM.
-*   🔊 **Tích hợp hội thoại Voice (Agora):** Cho phép khách hàng kết nối cuộc gọi thoại trực tiếp với AI Agent thông qua Agora RTC để trải nghiệm mua sắm không chạm.
-*   💸 **Thanh toán Solana Pay QR:** Tự động sinh mã QR Code động thanh toán bằng USDC (Devnet), hỗ trợ hiển thị ảnh QR dạng Base64 trực quan ngay trong bong bóng chat.
-*   📡 **Đối soát tự động & Real-time Dashboard:** Background worker (`paymentWatcher.js`) liên tục lắng nghe giao dịch trên Solana Devnet. Khi nhận được thanh toán, Dashboard bán hàng của Seller lập tức cập nhật trạng thái sang màu xanh lá cùng âm thanh "tinh tinh" và banner chúc mừng mà không cần tải lại trang (F5).
-*   🏦 **Simulated Off-ramp (Rút VND):** Tính năng rút USDC về tài khoản ngân hàng nội địa (như Techcombank, VPBank...) thông qua giao diện quy đổi tỷ giá VND dựa trên mô hình CAEX/TCEX.
-*   🔀 **Chuyển tiếp nhân viên hỗ trợ (Escalation):** Tự động phát hiện các từ khóa hoặc yêu cầu nhạy cảm để tạm dừng AI Bot và chuyển cuộc hội thoại cho nhân viên thật chăm sóc.
+### **Bài toán thực tế** 😭
+Các tiểu thương kinh doanh trực tuyến quy mô nhỏ (1-5 nhân sự) đang đối mặt với bài toán vận hành tốn thời gian:
+1. **Quá tải CSKH:** Trả lời hàng trăm tin nhắn lặp đi lặp lại về giá, kích thước, số lượng tồn kho. Chatbot truyền thống (ManyChat, Botpress) quá cứng nhắc theo quy tắc dựng sẵn, chỉ cần khách hỏi lệch là báo lỗi.
+2. **Thanh toán thủ công phức tạp:** Nhận chuyển khoản ngân hàng xuyên biên giới mất 2-5 ngày với chi phí đắt đỏ. Tại thị trường trong nước, việc gửi ảnh chụp màn hình hóa đơn chuyển khoản ngân hàng giả (Fake Bill) để gian lận ngày càng tinh vi, gây thất thoát doanh thu nghiêm trọng.
+
+### **Giải pháp ShopTalk** 💡
+ShopTalk tái định nghĩa thương mại điện tử bằng cách kết hợp **Lớp AI Agent hội thoại** với **Thanh toán Web3 phi tập trung**:
+*   Khách hàng có thể gọi điện trực tiếp để tư vấn bằng giọng nói tự nhiên thông qua **Agora Voice Channel** với thời gian phản hồi dưới 1 giây sử dụng mô hình ngôn ngữ lớn chạy trên nền tảng siêu tốc **Groq Cloud**.
+*   Khi chốt đơn, AI tự động tạo mã **Solana Pay QR Code** động chuyển thẳng vào ví người bán, xác thực giao dịch on-chain chỉ trong **400ms** với mức phí gần như bằng 0.
+*   Chủ shop nhận tiền ngay lập tức, Dashboard tự động nhảy trạng thái thành công (**Paid**) thời gian thực và mô phỏng rút tiền mặt VND về tài khoản ngân hàng thông qua đối tác off-ramp thí điểm (**CAEX/TCEX**).
+
+---
+
+## ⚡ Các tính năng cốt lõi đã hoàn thiện (Core Features)
+
+### 🔊 1. Conversational AI Chat (Hội thoại Voice & Text)
+*   **Trải nghiệm rảnh tay:** Tích hợp **Agora Voice Channel** cho phép khách hàng nhấn chọn "Voice Call" và nói chuyện trực tiếp với AI bán hàng.
+*   **Tốc độ siêu tốc (<1s):** Sự kết hợp giữa Agora RTC ASR/TTS và **Groq API (`llama-3.3-70b-versatile`)** giúp thời gian sinh văn bản và phản hồi giọng nói đạt mức **dưới 1 giây**, loại bỏ cảm giác chờ đợi gây khó chịu như các AI truyền thống.
+*   **Tự động điền đơn (Slot Filling):** AI tự động trích xuất thông tin khách hàng nói (tên, số điện thoại, địa chỉ nhận hàng) để gọi các công cụ lập đơn hàng tự động mà khách không cần điền tay bất kỳ biểu mẫu nào.
+
+### 💳 2. Solana Pay On-chain Payment (Thanh toán Web3 tức thì)
+*   **Mã QR Động:** Tự động tạo và đẩy mã QR Solana Pay dạng hình ảnh Base64 trực quan ngay trong khung chat của khách hàng khi chốt đơn.
+*   **Xác thực 5 lớp trong 2 giây:** Bộ giám sát giao dịch ngầm `paymentWatcher.js` liên tục truy vấn blockchain qua RPC Solana để xác thực giao dịch qua **5 bước nghiêm ngặt**:
+    1.  Trạng thái giao dịch on-chain bắt buộc phải là `confirmed` hoặc `finalized` (chống lỗi fork).
+    2.  Mint address khớp chính xác với **USDC Devnet** chuẩn (chống USDC giả mạo).
+    3.  Địa chỉ ví đích khớp chính xác ví người bán (`destination == SELLER_WALLET`).
+    4.  Số tiền nhận được lớn hơn hoặc bằng giá trị đơn hàng (`amount_received >= expected_amount`).
+    5.  Reference key on-chain khớp hoàn toàn mã reference độc bản của đơn hàng (chống trùng lặp giao dịch đồng giá).
+
+### 📊 3. Real-time Merchant Dashboard & Audio Chime (Bảng điều khiển thời gian thực)
+*   **Đồng bộ Socket.io:** Khi `paymentWatcher.js` xác nhận giao dịch thành công trên blockchain, backend lập tức bắn tín hiệu WebSocket đến frontend.
+*   **Thông báo sống động:** Dashboard của chủ shop lập tức đổi màu đơn hàng sang xanh lá cây, cập nhật tổng số dư USDC, và phát âm thanh chuông **"Tinh Tinh!"** sinh động báo hiệu doanh thu mới mà không cần F5 trang.
+
+### 🛡️ 4. Enterprise Security & RPC Optimization (Bảo mật & Tối ưu hóa RPC)
+*   **Cơ chế Idempotency:** Mỗi chữ ký giao dịch (`tx_signature`) chỉ được xử lý đúng một lần duy nhất nhờ ràng buộc unique trong database PostgreSQL, ngăn chặn tuyệt đối lỗi thanh toán trùng do người dùng ấn gửi nhiều lần.
+*   **Chống Rate-Limit (429):** Background worker tích hợp cơ chế **Exponential Backoff** và giãn cách truy vấn thông minh đối với Solana RPC, đảm bảo hệ thống vận hành liên tục mà không bị khóa tài khoản RPC khi lưu lượng truy cập cao.
 
 ---
 
 ## 🛠️ Stack Công nghệ (Tech Stack)
 
-### 1. Backend Server
-*   **Core:** Node.js & Express.
-*   **Database:** PostgreSQL (Lưu trữ thông tin sản phẩm, đơn hàng và lịch sử giao dịch).
-*   **WebSockets:** Socket.io (Đẩy dữ liệu trạng thái đơn hàng tức thời lên frontend).
-
-### 2. Trí tuệ nhân tạo (AI Engine)
-*   **LLM Provider:** Groq Cloud API.
-*   **Model:** `llama-3.3-70b-versatile` (Đảm bảo tốc độ xử lý nhanh, khả năng Tool Calling chính xác).
-
-### 3. Blockchain & Web3
-*   **Solana Integration:** `@solana/web3.js`, `@solana/pay`, `@solana/spl-token`.
-*   **Mạng thử nghiệm:** Solana Devnet.
-*   **Token thanh toán:** USDC Devnet (Mint: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`).
-
-### 4. Giao tiếp Thời gian thực (Voice Channel)
-*   **Voice SDK:** Agora RTC (Thông qua thư viện `agora-token` trên backend để xác thực bảo mật).
-
-### 5. Frontend Client
-*   **Framework:** React (Vite) + Tailwind CSS + Framer Motion (Xử lý các hiệu ứng chuyển động mượt mà).
-*   **Client Socket:** Socket.io-client (Lắng nghe sự kiện cập nhật trạng thái đơn hàng).
+| Thành phần | Công nghệ / Thư viện | Mô tả chi tiết |
+| :--- | :--- | :--- |
+| **Backend Core** | Node.js, Express | Cung cấp REST API xử lý nghiệp vụ, quản lý đơn hàng và phiên chat |
+| **AI Engine** | Groq Cloud, Llama 3.3 70B | Trí tuệ nhân tạo nhận diện ý định, tư vấn và gọi công cụ thông minh |
+| **Voice SDK** | Agora RTC, agora-token | Thiết lập phòng đàm thoại voice, truyền phát và mã hóa token RTC |
+| **Blockchain** | @solana/web3.js, @solana/pay, @solana/spl-token | Tạo giao dịch Solana Pay, lắng nghe sự kiện on-chain, đối soát token USDC |
+| **Database** | PostgreSQL, pg | Lưu trữ dữ liệu đơn hàng, lịch sử chat và các trạng thái phiên |
+| **Realtime** | Socket.io, socket.io-client | Giao tiếp thời gian thực hai chiều giữa Client - Server - Dashboard |
+| **Frontend Core** | React, Vite, Tailwind CSS | Xây dựng giao diện Responsive, Chat Widget mượt mà cùng hiệu ứng Framer Motion |
+| **Charts & Tools** | Recharts, node-cron, bignumber.js | Vẽ biểu đồ Off-ramp tỷ giá, tự động hủy đơn hết hạn và xử lý toán học lớn |
 
 ---
 
-## 📐 Kiến trúc & Luồng vận hành (System Architecture)
+## 📐 Kiến trúc hệ thống (System Architecture)
 
-Luồng hoạt động end-to-end của ShopTalk được mô tả qua biểu đồ dưới đây:
+Luồng hoạt động end-to-end từ lúc khách hàng vào shop đến khi rút tiền VND:
 
 ```mermaid
 graph TD
-    User[Khách hàng] -->|1. Chat / Voice| AI[AI Sales Agent - Groq Llama 3]
-    AI -->|2. Gọi công cụ| Inventory[Inventory Service]
-    AI -->|2. Tạo đơn hàng| DB[(Database - PostgreSQL)]
-    AI -->|3. Trả về QR Code Base64| User
-    User -->|4. Quét QR & Thanh toán| Solana{Blockchain Solana Devnet}
+    User[Khách hàng] -->|1. Trò chuyện thoại / text| AI[AI Sales Agent - Groq Llama 3]
+    AI -->|2. Gọi tool check kho| Inventory[Inventory Service]
+    AI -->|2. Lập đơn pending| DB[(PostgreSQL Database)]
+    AI -->|3. Sinh QR Solana Pay base64| User
+    User -->|4. Quét QR qua Phantom Wallet| Solana{Solana Devnet Blockchain}
     
-    Watcher[Payment Watcher Backend] -->|5. Polling & Verify| Solana
-    Watcher -->|6. Xác nhận thành công| DB
-    Watcher -->|7. Phát sự kiện Socket.io| Socket[Socket.io Server]
+    Watcher[Payment Watcher Backend] -->|5. Đối soát 5 lớp| Solana
+    Watcher -->|6. Cập nhật paid| DB
+    Watcher -->|7. Đẩy sự kiện qua Socket.io| Socket[Socket.io Server]
     
-    Socket -->|8. Cập nhật real-time| Dashboard[Seller Dashboard]
-    Dashboard -->|9. Bấm Rút VND| CAEX[Mô phỏng Off-ramp CAEX/TCEX]
+    Socket -->|8. Đổi màu đơn + Kêu 'Tinh tinh'| Dashboard[Seller Dashboard]
+    Dashboard -->|9. Chọn Off-ramp rút VND| CAEX[Mô phỏng quy đổi CAEX/TCEX]
 ```
-
-1.  **Tương tác:** Khách hàng trò chuyện qua Chat Widget hoặc Voice với AI Agent.
-2.  **Xử lý:** AI Agent phân tích câu lệnh, tự động tra cứu danh mục hàng hóa (Inventory) và tạo đơn hàng (Create Order) lưu vào database ở trạng thái `pending`.
-3.  **Tạo QR:** Hệ thống sinh mã QR Solana Pay dạng Base64 gửi lại cho khách hàng quét.
-4.  **Thanh toán:** Khách hàng sử dụng ví Solana (Phantom, Solflare, v.v.) quét mã QR và ký duyệt giao dịch trên mạng Devnet.
-5.  **Xác thực:** Bộ đối soát chạy ngầm `paymentWatcher.js` phát hiện giao dịch khớp với reference của đơn hàng trên blockchain, xác thực số tiền và token hợp lệ.
-6.  **Cập nhật:** Đơn hàng chuyển trạng thái sang `paid` trong database và bắn tín hiệu WebSocket.
-7.  **Đồng bộ:** Dashboard của người bán cập nhật trạng thái tức thì, phát âm thanh và hiển thị thông báo.
-8.  **Rút tiền:** Người bán bấm nút rút tiền, chọn ngân hàng, hệ thống mô phỏng quy trình Off-ramp chuyển đổi USDC thành VND.
 
 ---
 
-## ⚙️ Hướng dẫn Cài đặt & Cấu hình
+## 📈 Tiến độ dự án hiện tại (Current Progress)
+
+Chúng tôi đã hoàn thành giai đoạn **Proof of Concept (POC)** hoàn chỉnh bao gồm:
+*   [x] **End-to-End Demo:** Luồng đi từ khách hàng chat voice -> Tạo hóa đơn -> Quét QR -> Đổi trạng thái Dashboard -> Rút tiền VND hoạt động hoàn toàn tự động.
+*   [x] **Database Migration:** Script [migrate.js](file:///d:/CONVO%20HACKATHON/ShopTalk/backend/src/config/migrate.js) thiết lập cấu trúc DB PostgreSQL chuẩn, tối ưu hóa index tìm kiếm cho đơn hàng và chữ ký giao dịch.
+*   [x] **Core Models:** Hệ thống hóa các bảng lưu trữ thông tin sản phẩm, đơn hàng, phiên làm việc (sessions) và lịch sử chat (chat_history).
+
+---
+
+## 🎯 Kế hoạch phát triển tiếp theo (Roadmap)
+
+- [ ] **Hoàn thiện luồng Escalation:** Tự động phát hiện các yêu cầu phức tạp hoặc khiếu nại nhạy cảm từ khách hàng để tạm thời ngắt kết nối AI Bot, lập tức chuyển tiếp cuộc trò chuyện sang cho nhân viên/chủ shop trực tuyến xử lý qua Dashboard.
+- [ ] **Đồng bộ kho hàng tự động:** Tích hợp API của các nền tảng quản lý kho phổ biến tại Việt Nam như **Sapo**, **KiotViet** hoặc **Nhanh.vn** để tự động cập nhật tồn kho real-time mà chủ shop không cần chỉnh sửa thủ công.
+- [ ] **Tối ưu hóa UI/UX Mobile Widget:** Thiết kế lại khung chat widget cho các thiết bị di động nhỏ gọn, hỗ trợ thao tác vuốt chạm một chạm mượt mà hơn.
+
+---
+
+## 🚀 Hướng dẫn cài đặt nhanh (Quick Start)
 
 ### Yêu cầu hệ thống
-*   Đã cài đặt **Node.js** (Phiên bản v18 trở lên).
-*   Đã khởi tạo cơ sở dữ liệu **PostgreSQL**.
-*   Có tài khoản và API Key của **Groq** và **Agora**.
+*   **Node.js** phiên bản v18 trở lên.
+*   Cơ sở dữ liệu **PostgreSQL** đang chạy.
+*   API key của **Groq** và **Agora**.
 
-### 1. Cấu hình biến môi trường
-Tạo file `.env` tại thư mục `/backend` của dự án với các cấu hình sau:
+### 1. Cấu hình Biến môi trường
+Tạo tệp `.env` tại thư mục `/backend` theo mẫu sau:
 
 ```env
-# Kết nối Cơ sở dữ liệu PostgreSQL
-DATABASE_URL=postgresql://<username>:<password>@localhost:5432/<dbname>
+# Database connection
+DATABASE_URL=postgresql://postgres:<your_password>@localhost:5432/shoptalk
 
-# Cấu hình mạng Solana (Khuyên dùng RPC Devnet hoặc QuickNode/Helius)
+# Solana RPC Connection (Devnet)
 SOLANA_RPC_URL=https://api.devnet.solana.com
 SELLER_WALLET=Bv3n1H1XU2Rz2k2eK1tqJj6Tuxy9rSwP8gM99fKkZpQy
 
-# Cấu hình AI Sales Agent (API Key từ Groq)
-GROQ_API_KEY=gsk_your_groq_api_key_here
+# Groq API Key
+GROQ_API_KEY=gsk_your_groq_api_key
 
-# Cấu hình Agora Conversational Voice SDK
+# Agora App configurations
 AGORA_APP_ID=your_agora_app_id
 AGORA_APP_CERTIFICATE=your_agora_app_certificate
 AGORA_CUSTOMER_ID=your_agora_customer_id
 AGORA_CUSTOMER_SECRET=your_agora_customer_secret
+
+# Order Threshold for escalation (Optional)
+ESCALATION_ORDER_THRESHOLD_USDC=100
 ```
 
----
+### 2. Các lệnh khởi chạy
 
-### 2. Các bước khởi chạy dự án
+#### Bước A: Cài đặt & Khởi động Backend
+```bash
+# Di chuyển vào thư mục backend
+cd backend
 
-#### Bước A: Cài đặt và cấu hình Backend
-1.  Di chuyển vào thư mục backend:
-    ```bash
-    cd backend
-    ```
-2.  Cài đặt các gói thư viện cần thiết:
-    ```bash
-    npm install
-    ```
-3.  Chạy migration để khởi tạo cấu trúc bảng cơ sở dữ liệu `orders`:
-    ```bash
-    npm run migrate
-    ```
-4.  Khởi chạy máy chủ Backend:
-    ```bash
-    npm start
-    ```
-    *Mặc định backend sẽ chạy tại địa chỉ http://localhost:3000.*
+# Cài đặt thư viện
+npm install
 
-#### Bước B: Cài đặt và khởi chạy Frontend
-1.  Mở một cửa sổ Terminal mới và di chuyển vào thư mục frontend:
-    ```bash
-    cd frontend
-    ```
-2.  Cài đặt các gói thư viện React:
-    ```bash
-    npm install
-    ```
-3.  Khởi động server phát triển Vite:
-    ```bash
-    npm run dev
-    ```
-    *Mặc định frontend sẽ hoạt động tại địa chỉ http://localhost:5173.*
+# Khởi chạy database migration tạo bảng
+npm run migrate
+
+# Khởi chạy server API & Payment Watcher
+npm start
+```
+*Backend sẽ chạy mặc định tại cổng `http://localhost:3000`.*
+
+#### Bước B: Cài đặt & Khởi động Frontend
+```bash
+# Mở terminal mới và di chuyển vào thư mục frontend
+cd frontend
+
+# Cài đặt thư viện
+npm install
+
+# Chạy server phát triển Vite
+npm run dev
+```
+*Frontend sẽ chạy mặc định tại `http://localhost:5173`.*
 
 ---
 
-## 🚀 Trạng thái Dự án (Current Status)
+## 👥 Thành viên dự án (Team NopeQi)
+*   **Nguyễn Như Quỳnh**
+*   **Hồ Nguyễn Thảo Nguyên**
+*   **Nguyễn Thị Thanh Phúc**
+*   **Tăng Ngọc Hậu**
+*   *Mentor hỗ trợ:* **Anh Tuấn**
 
-Dự án hiện đang ở giai đoạn **POC (Proof of Concept)**:
-*   [x] Hoàn thiện khung kết nối và hội thoại thông minh đa lượt với AI Sales Agent qua Groq.
-*   [x] Tích hợp thành công Solana Pay sinh QR Code base64 động.
-*   [x] Background Worker tự động đối soát on-chain có cơ chế Exponential Backoff chống lỗi Rate Limit (429).
-*   [x] Dashboard bán hàng nhận diện cập nhật trạng thái thời gian thực thông qua WebSockets (Socket.io).
-*   [x] Giao diện giả lập Off-ramp chuyển tiền từ USDC sang VND đạt độ hoàn thiện cao.
-*   [x] Tích hợp cơ chế RTC Token của Agora cho các tính năng voice trong tương lai.
+---
+*Dự án được xây dựng và trình bày trong khuôn khổ Cuộc thi Hackathon Convo 2026.*
