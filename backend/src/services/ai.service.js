@@ -549,9 +549,12 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
   const isEnglish = language === 'en';
   const asrLanguage = isEnglish ? "en-US" : "vi-VN";
   const ttsVoice = isEnglish ? "en-US-AriaNeural" : "vi-VN-HoaiMyNeural";
+  
   // Lấy danh sách sản phẩm thực tế để nhúng vào Prompt cho Voice AI (Prompt Injection)
   const products = getProducts();
-  const productListStr = products.map(p => `- ${p.name}: ${p.price_usdc} USDC`).join("\n");
+  const productListStr = products.map(p => 
+    `- ${p.name}: ${p.price_usdc} USDC (Còn ${p.stock} sản phẩm)\n  ${p.description || ''}`
+  ).join("\n");
 
   const systemPrompt = isEnglish
     ? `You are a sales assistant for ShopTalk. Be brief and helpful. We ONLY sell these products:\n${productListStr}\n\nCRITICAL: Your responses are spoken via Text-to-Speech. NEVER output JSON or <function> tags in your text.\nWHEN THE USER BUYS: You MUST ask for their full name and shipping address. After they provide it, use the built-in \`create_order\` tool via standard function calling (do NOT output raw text for the tool).`
@@ -587,6 +590,7 @@ NẾU KHÁCH YÊU CẦU ĐỔI THÔNG TIN (sửa tên, đổi địa chỉ, thê
 
   // Tên agent unique
   const agentName = `shoptalk-${channelName}-${Date.now()}`;
+  const agentId = `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
   // Request body theo Agora API v2 flat format (đúng spec)
   const requestBody = {
@@ -617,7 +621,7 @@ NẾU KHÁCH YÊU CẦU ĐỔI THÔNG TIN (sửa tên, đổi địa chỉ, thê
         mcp_servers: [
           {
             name: "shoptalk",
-            endpoint: `${webhookUrl}/mcp/sse`,
+            endpoint: `${webhookUrl}/mcp/sse?agent_id=${agentId}`,
             transport: "sse"
           }
         ]
@@ -641,8 +645,8 @@ NẾU KHÁCH YÊU CẦU ĐỔI THÔNG TIN (sửa tên, đổi địa chỉ, thê
   };
 
   try {
-    console.log(`[Agora] 📡 Starting agent "${agentName}" | Channel: "${channelName}" | ASR: ${asrLanguage}`);
-    if (webhookUrl) console.log(`[Agora] 🔗 Webhook: ${webhookUrl}/api/agent-tools`);
+    console.log(`[Agora] 📡 Starting agent "${agentName}" | Agent ID: "${agentId}" | Channel: "${channelName}" | ASR: ${asrLanguage}`);
+    if (webhookUrl) console.log(`[Agora] 🔗 MCP Endpoint: ${webhookUrl}/mcp/sse?agent_id=${agentId}`);
 
     const resp = await fetch(`https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`, {
       method: 'POST',
@@ -667,6 +671,7 @@ NẾU KHÁCH YÊU CẦU ĐỔI THÔNG TIN (sửa tên, đổi địa chỉ, thê
     return {
       success: resp.ok,
       agentName,
+      agentId,
       data: result
     };
   } catch (error) {
@@ -674,6 +679,7 @@ NẾU KHÁCH YÊU CẦU ĐỔI THÔNG TIN (sửa tên, đổi địa chỉ, thê
     return {
       success: false,
       agentName,
+      agentId: null,
       message: error.message
     };
   }

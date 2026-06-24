@@ -10,6 +10,63 @@ const server = new McpServer({
   version: "1.0.0"
 });
 
+// ─── Helper: Format JSON thành câu tự nhiên cho TTS ─────────────────────────
+/**
+ * Chuyển đổi response JSON từ tool thành câu tiếng Việt tự nhiên
+ * để phù hợp với Text-to-Speech (TTS) trong voice call
+ */
+const formatToolResponseForVoice = (toolName, resultStr) => {
+  try {
+    const result = JSON.parse(resultStr);
+    
+    switch (toolName) {
+      case 'create_order':
+        if (result.success) {
+          return `Dạ em đã tạo đơn hàng thành công cho anh chị rồi ạ! Sản phẩm ${result.product_name}, tổng số tiền ${result.amount} USDC. Mã đơn hàng là ${result.order_id}. Em sẽ gửi mã QR thanh toán cho anh chị ngay bây giờ nhé!`;
+        } else {
+          return `Em xin lỗi anh chị, không thể tạo đơn hàng được: ${result.error || 'Lỗi không xác định'}. Anh chị vui lòng thử lại sau ạ.`;
+        }
+      
+      case 'check_inventory':
+        if (result.found) {
+          return `Dạ sản phẩm ${result.name} hiện đang còn ${result.stock} chiếc trong kho với giá ${result.price_usdc} USDC ạ.`;
+        } else {
+          return `Em xin lỗi anh chị, hiện tại sản phẩm này đang hết hàng hoặc không có trong kho ạ.`;
+        }
+      
+      case 'generate_payment_qr':
+        if (result.success) {
+          return `Dạ mã QR thanh toán cho đơn hàng ${result.order_id} đã sẵn sàng ạ. Tổng số tiền cần thanh toán là ${result.amount} USDC. Anh chị vui lòng mở ví Phantom hoặc Solflare, chuyển sang mạng Devnet và quét mã QR để hoàn tất thanh toán nhé!`;
+        } else {
+          return `Em xin lỗi anh chị, không thể tạo mã QR thanh toán: ${result.message || 'Lỗi không xác định'}. Vui lòng thử lại sau ạ.`;
+        }
+      
+      case 'get_reviews':
+        if (result.success && result.reviews && result.reviews.length > 0) {
+          const reviewSummary = result.reviews.slice(0, 3).map((review, idx) => 
+            `Khách hàng ${review.user} đánh giá ${review.rating} sao: ${review.comment}`
+          ).join('. ');
+          return `Dạ sản phẩm ${result.product_name} có nhiều đánh giá tích cực lắm ạ. ${reviewSummary}.`;
+        } else {
+          return `Em xin lỗi anh chị, hiện chưa có đánh giá nào cho sản phẩm này ạ.`;
+        }
+      
+      case 'log_feedback':
+        if (result.success) {
+          return `Dạ em cảm ơn anh chị đã đóng góp ý kiến! Shop đã ghi nhận phản hồi và sẽ liên tục cải thiện dịch vụ ạ.`;
+        } else {
+          return `Em xin lỗi anh chị, không thể ghi nhận phản hồi lúc này. Vui lòng thử lại sau ạ.`;
+        }
+      
+      default:
+        return result.message || resultStr;
+    }
+  } catch (error) {
+    // Nếu không parse được JSON, trả về text gốc
+    return resultStr;
+  }
+};
+
 // Đăng ký Tool tạo đơn hàng
 server.tool(
   "create_order",
@@ -50,14 +107,18 @@ server.tool(
         }
       }
 
-      // Trả về JSON cho LLM theo chuẩn MCP
+      // Format response thành câu tự nhiên cho voice TTS
+      const voiceFriendlyResponse = formatToolResponseForVoice("create_order", resultStr);
+      
       return {
-        content: [{ type: "text", text: resultStr }]
+        content: [{ type: "text", text: voiceFriendlyResponse }]
       };
     } catch (error) {
       console.error("[MCP] Lỗi thực thi tool create_order:", error);
+      // Humanized error message cho TTS
+      const errorMessage = `Em xin lỗi anh chị, hệ thống đang gặp sự cố khi tạo đơn hàng: ${error.message}. Vui lòng thử lại sau một chút ạ.`;
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }) }]
+        content: [{ type: "text", text: errorMessage }]
       };
     }
   }
@@ -74,10 +135,12 @@ server.tool(
     try {
       console.log(`[MCP] Đang thực thi tool check_inventory cho sản phẩm: ${product_name}`);
       const resultStr = await executeTool("check_inventory", { product_name });
-      return { content: [{ type: "text", text: resultStr }] };
+      const voiceFriendlyResponse = formatToolResponseForVoice("check_inventory", resultStr);
+      return { content: [{ type: "text", text: voiceFriendlyResponse }] };
     } catch (error) {
       console.error("[MCP] Lỗi thực thi tool check_inventory:", error);
-      return { content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }) }] };
+      const errorMessage = `Em xin lỗi anh chị, không thể kiểm tra tồn kho lúc này: ${error.message}. Vui lòng thử lại sau ạ.`;
+      return { content: [{ type: "text", text: errorMessage }] };
     }
   }
 );
@@ -93,10 +156,12 @@ server.tool(
     try {
       console.log(`[MCP] Đang thực thi tool generate_payment_qr cho order: ${order_id}`);
       const resultStr = await executeTool("generate_payment_qr", { order_id });
-      return { content: [{ type: "text", text: resultStr }] };
+      const voiceFriendlyResponse = formatToolResponseForVoice("generate_payment_qr", resultStr);
+      return { content: [{ type: "text", text: voiceFriendlyResponse }] };
     } catch (error) {
       console.error("[MCP] Lỗi thực thi tool generate_payment_qr:", error);
-      return { content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }) }] };
+      const errorMessage = `Em xin lỗi anh chị, không thể tạo mã QR thanh toán lúc này: ${error.message}. Vui lòng thử lại sau ạ.`;
+      return { content: [{ type: "text", text: errorMessage }] };
     }
   }
 );
@@ -112,10 +177,12 @@ server.tool(
     try {
       console.log(`[MCP] Đang thực thi tool get_reviews cho sản phẩm: ${product_name}`);
       const resultStr = await executeTool("get_reviews", { product_name });
-      return { content: [{ type: "text", text: resultStr }] };
+      const voiceFriendlyResponse = formatToolResponseForVoice("get_reviews", resultStr);
+      return { content: [{ type: "text", text: voiceFriendlyResponse }] };
     } catch (error) {
       console.error("[MCP] Lỗi thực thi tool get_reviews:", error);
-      return { content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }) }] };
+      const errorMessage = `Em xin lỗi anh chị, không thể lấy đánh giá sản phẩm lúc này: ${error.message}. Vui lòng thử lại sau ạ.`;
+      return { content: [{ type: "text", text: errorMessage }] };
     }
   }
 );
@@ -132,36 +199,124 @@ server.tool(
     try {
       console.log(`[MCP] Đang thực thi tool log_feedback...`);
       const resultStr = await executeTool("log_feedback", { order_id, feedback_text });
-      return { content: [{ type: "text", text: resultStr }] };
+      const voiceFriendlyResponse = formatToolResponseForVoice("log_feedback", resultStr);
+      return { content: [{ type: "text", text: voiceFriendlyResponse }] };
     } catch (error) {
       console.error("[MCP] Lỗi thực thi tool log_feedback:", error);
-      return { content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }) }] };
+      const errorMessage = `Em xin lỗi anh chị, không thể ghi nhận phản hồi lúc này: ${error.message}. Nhưng em đã ghi chú lại và sẽ xử lý cho anh chị sớm nhất ạ.`;
+      return { content: [{ type: "text", text: errorMessage }] };
     }
   }
 );
 
-// Quản lý kết nối SSE
-let currentTransport = null;
+// ─── Quản lý nhiều kết nối SSE đồng thời ─────────────────────────────────────
+// Map để lưu trữ nhiều transport theo agentId/sessionId
+const activeTransports = new Map(); // key: agentId/sessionId -> value: transport object
 
-const handleSse = async (req, res) => {
-  console.log(`[MCP] Client connected via SSE | Method: ${req.method}`);
-  if (Object.keys(req.body || {}).length > 0) {
-    console.log(`[MCP] Request Body in SSE connection:`, JSON.stringify(req.body, null, 2));
-  }
-  const webhookUrl = process.env.WEBHOOK_URL || 'http://localhost:3000';
-  currentTransport = new SSEServerTransport(`${webhookUrl}/mcp/messages`, res);
-  await server.connect(currentTransport);
-  console.log(`[MCP] SSE Transport đã kết nối thành công! Messages Endpoint: ${webhookUrl}/mcp/messages`);
+/**
+ * Tạo unique ID cho mỗi SSE connection
+ */
+const generateConnectionId = () => {
+  return `conn-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 };
 
-const handleMessages = async (req, res) => {
-  if (!currentTransport) {
-    return res.status(400).send("No active SSE connection");
+/**
+ * Handle SSE connection từ Agora Agent
+ * Hỗ trợ nhiều agents kết nối đồng thời
+ */
+const handleSse = async (req, res) => {
+  // Lấy agentId từ query params hoặc tạo mới
+  const agentId = req.query.agent_id || req.query.session_id || generateConnectionId();
+  
+  console.log(`[MCP] 🔌 Client connected via SSE | Agent ID: ${agentId} | Method: ${req.method}`);
+  
+  if (Object.keys(req.body || {}).length > 0) {
+    console.log(`[MCP] Request Body:`, JSON.stringify(req.body, null, 2));
   }
-  await currentTransport.handlePostMessage(req, res);
+
+  const webhookUrl = process.env.WEBHOOK_URL || 'http://localhost:3000';
+  const transport = new SSEServerTransport(`${webhookUrl}/mcp/messages`, res);
+  
+  // Lưu transport vào Map
+  activeTransports.set(agentId, {
+    transport,
+    connectedAt: new Date(),
+    agentId
+  });
+  
+  console.log(`[MCP] 📊 Active connections: ${activeTransports.size}`);
+
+  // Cleanup khi connection đóng
+  res.on('close', () => {
+    activeTransports.delete(agentId);
+    console.log(`[MCP] 🔌 Client disconnected | Agent ID: ${agentId}`);
+    console.log(`[MCP] 📊 Active connections: ${activeTransports.size}`);
+  });
+
+  // Cleanup khi có lỗi
+  res.on('error', (error) => {
+    console.error(`[MCP] ❌ SSE Connection error for Agent ID ${agentId}:`, error.message);
+    activeTransports.delete(agentId);
+  });
+
+  try {
+    await server.connect(transport);
+    console.log(`[MCP] ✅ SSE Transport connected | Agent ID: ${agentId} | Endpoint: ${webhookUrl}/mcp/messages`);
+  } catch (error) {
+    console.error(`[MCP] ❌ Failed to connect transport for Agent ID ${agentId}:`, error.message);
+    activeTransports.delete(agentId);
+    res.status(500).send("Failed to establish SSE connection");
+  }
+};
+
+/**
+ * Handle POST messages từ Agora Agent
+ * Tìm đúng transport tương ứng với agent đang gọi
+ */
+const handleMessages = async (req, res) => {
+  const agentId = req.query.agent_id || req.query.session_id;
+  
+  if (!agentId) {
+    console.error("[MCP] ❌ Missing agent_id or session_id in request");
+    return res.status(400).json({ 
+      error: "Missing agent_id or session_id parameter",
+      hint: "Add ?agent_id=<your_agent_id> to the request URL"
+    });
+  }
+
+  const transportData = activeTransports.get(agentId);
+  
+  if (!transportData) {
+    console.error(`[MCP] ❌ No active SSE connection for Agent ID: ${agentId}`);
+    console.log(`[MCP] 📊 Available connections: ${Array.from(activeTransports.keys()).join(', ')}`);
+    return res.status(400).json({ 
+      error: `No active SSE connection for agent_id: ${agentId}`,
+      availableAgents: Array.from(activeTransports.keys())
+    });
+  }
+
+  try {
+    await transportData.transport.handlePostMessage(req, res);
+  } catch (error) {
+    console.error(`[MCP] ❌ Error handling message for Agent ID ${agentId}:`, error.message);
+    res.status(500).json({ error: "Failed to handle message" });
+  }
+};
+
+/**
+ * Utility: Lấy danh sách các connections đang hoạt động
+ * Hữu ích cho debug và monitoring
+ */
+const getActiveConnections = () => {
+  return Array.from(activeTransports.entries()).map(([agentId, data]) => ({
+    agentId,
+    connectedAt: data.connectedAt,
+    uptime: Date.now() - data.connectedAt.getTime()
+  }));
 };
 
 module.exports = {
   handleSse,
-  handleMessages
+  handleMessages,
+  getActiveConnections
 };

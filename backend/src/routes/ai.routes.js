@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { chat, generateAgoraToken, startAgoraAgent } = require('../services/ai.service');
-const { handleSse, handleMessages } = require('../mcp/mcp.server');
+const { handleSse, handleMessages, getActiveConnections } = require('../mcp/mcp.server');
 
 /**
  * Route: POST /chat
@@ -140,5 +140,26 @@ router.all('/mcp/sse', handleSse);
  * Mô tả: MCP Server message endpoint
  */
 router.post('/mcp/messages', handleMessages);
+
+/**
+ * Route: GET /mcp/connections
+ * Mô tả: Lấy danh sách active MCP SSE connections (cho monitoring/debugging)
+ */
+router.get('/mcp/connections', (req, res) => {
+  try {
+    const connections = getActiveConnections();
+    return res.status(200).json({
+      success: true,
+      count: connections.length,
+      connections: connections
+    });
+  } catch (error) {
+    console.error('[Route] Error getting MCP connections:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Không thể lấy danh sách connections'
+    });
+  }
+});
 
 module.exports = router;
