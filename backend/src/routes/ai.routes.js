@@ -33,6 +33,7 @@ router.post('/chat', async (req, res) => {
       success: true,
       sessionId,
       reply: result.reply,
+      function_call: result.function_call || null,
       escalate: result.escalate || false,
       qrCodeImage: result.qrCodeImage || null,
       orderId: result.orderId || null,
@@ -88,7 +89,7 @@ router.post('/agora/token', (req, res) => {
  * Mô tả: Mời Agora Conversational AI Agent tham gia vào kênh voice RTC tương ứng.
  * Body: { channelName, agentUid, language, sessionId }
  */
-router.post('/agora/start-agent', async (req, res) => {
+router.post('/start-agent', async (req, res) => {
   try {
     const { channelName, agentUid, language, sessionId } = req.body;
 
@@ -113,6 +114,7 @@ router.post('/agora/start-agent', async (req, res) => {
     }
 
     console.log(`[Route] Start agent succeeded: ${result.agentName}`);
+    console.log(`[Backend AI Route] AI Agent đã được mời thành công vào kênh: ${channelName}`);
     return res.status(200).json({
       success: true,
       message: 'Đã gửi yêu cầu kích hoạt AI Agent tham gia kênh thành công.',

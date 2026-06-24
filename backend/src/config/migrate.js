@@ -32,6 +32,9 @@ async function runMigration() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255);
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_address TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS items_list JSONB;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_tx_signature_unique
+      ON orders (tx_signature)
+      WHERE tx_signature IS NOT NULL;
   `;
 
   try {
