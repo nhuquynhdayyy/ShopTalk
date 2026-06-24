@@ -122,7 +122,7 @@ const updateOrderStatus = async (id, status, txSignature = null) => {
       AND status <> 'paid'
       AND (
         $2 <> 'paid'
-        OR status IN ('pending', 'payment_mismatch')
+        OR status IN ('pending', 'payment_mismatch', 'expired')
       )
       AND (
         $3::varchar IS NULL

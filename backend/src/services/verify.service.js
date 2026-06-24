@@ -6,33 +6,44 @@ const DEVNET_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.
 
 const rpcCall = async (method, params, maxRetries = 3, baseDelayMs = 3000) => {
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    const response = await fetch(DEVNET_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: `verify-${Date.now()}-${attempt}`,
-        method,
-        params,
-      }),
-    });
+    try {
+      const response = await fetch(DEVNET_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: `verify-${Date.now()}-${attempt}`,
+          method,
+          params,
+        }),
+      });
 
-    const json = await response.json();
+      const json = await response.json();
 
-    if (response.status === 429 || (json.error && json.error.code === 429)) {
+      if (response.status === 429 || (json.error && json.error.code === 429)) {
+        throw { isRateLimit: true, error: json.error || { message: 'Too Many Requests' } };
+      }
+
+      if (json.error) {
+        throw new Error(`RPC error (${method}): ${JSON.stringify(json.error)}`);
+      }
+
+      return json.result;
+    } catch (error) {
+      const isRateLimit = error && error.isRateLimit;
+
       if (attempt < maxRetries) {
         const delayMs = baseDelayMs * Math.pow(2, attempt);
+        console.warn(`[RPC Retry] ${method} attempt ${attempt} failed. Retrying in ${delayMs}ms... Error:`, error.message || JSON.stringify(error));
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
-      throw new Error(`RPC rate limit: ${JSON.stringify(json.error)}`);
-    }
 
-    if (json.error) {
-      throw new Error(`RPC error (${method}): ${JSON.stringify(json.error)}`);
+      if (isRateLimit) {
+        throw new Error(`RPC rate limit: ${JSON.stringify(error.error)}`);
+      }
+      throw error;
     }
-
-    return json.result;
   }
 
   return null;

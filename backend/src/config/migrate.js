@@ -35,6 +35,10 @@ async function runMigration() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_tx_signature_unique
       ON orders (tx_signature)
       WHERE tx_signature IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_orders_status_expires_at
+      ON orders (status, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_orders_status_created_at
+      ON orders (status, created_at);
   `;
 
   try {

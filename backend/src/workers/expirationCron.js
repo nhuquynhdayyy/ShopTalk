@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { getExpiredPendingOrders, updateOrderStatus } = require('../models/order.model');
+const db = require('../config/db');
 
 let expirationTask = null;
 let isSweeping = false;
@@ -12,17 +12,26 @@ const runExpirationSweep = async () => {
   isSweeping = true;
 
   try {
-    const expiredOrders = await getExpiredPendingOrders();
+    const queryText = `
+      UPDATE orders
+      SET status = 'expired'
+      WHERE status = 'pending'
+        AND expires_at <= NOW()
+      RETURNING id;
+    `;
+    const res = await db.query(queryText);
 
-    for (const order of expiredOrders) {
-      await updateOrderStatus(order.id, 'expired');
-      console.log(`[ExpirationCron] Order #${order.id} expired after payment timeout.`);
+    if (res.rowCount > 0) {
+      console.log(`[ExpirationCron] Successfully expired ${res.rowCount} pending orders.`);
     }
 
     return {
       skipped: false,
-      expiredCount: expiredOrders.length,
+      expiredCount: res.rowCount,
     };
+  } catch (error) {
+    console.error('[ExpirationCron] Error in runExpirationSweep:', error.message);
+    throw error;
   } finally {
     isSweeping = false;
   }

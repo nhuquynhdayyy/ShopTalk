@@ -116,7 +116,7 @@ const executeTool = async (name, args) => {
       case 'create_order': {
         // Sinh reference key ngẫu nhiên dùng thư viện @solana/web3.js
         const referenceKey = Keypair.generate().publicKey.toBase58();
-        const sellerWallet = args.seller_wallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
+        const sellerWallet = args.seller_wallet || process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
 
         const newOrder = await createOrder({
           reference: referenceKey,
@@ -797,7 +797,7 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
         reference: referenceKey,
         product_name: productName,
         amount: amount,
-        seller_wallet: '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
+        seller_wallet: process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
         status: 'pending'
       });
       orderId = newOrder.id;

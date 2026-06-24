@@ -263,7 +263,7 @@ const llmWebhookHandler = async (req, res) => {
           reference: referenceKey,
           product_name: detectedProductName,
           amount: detectedAmount,
-          seller_wallet: '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
+          seller_wallet: process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
           status: 'pending',
           customer_name: detectedName,
           customer_address: detectedAddress
