@@ -194,3 +194,4 @@ git push origin [tên-nhánh-của-mình]
 *   Commit message phải rõ ràng, viết bằng tiếng Việt hoặc tiếng Anh đều được, miễn dễ hiểu.
 *   **Không** push code trực tiếp lên nhánh `main`.
 *   Sau khi push xong, tạo Pull Request (PR) và thông báo cho team.
+

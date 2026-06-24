@@ -1,6 +1,11 @@
+const Groq = require('groq-sdk');
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 const { Keypair } = require('@solana/web3.js');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const { checkInventory, normalize, getProducts } = require('./inventory.service');
+const axios = require('axios');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
 const { getIo } = require('../websocket/socket.server');
@@ -15,6 +20,17 @@ PHỄU BÁN HÀNG 6 BƯỚC (Khung tư duy):
 4. UPSELL (Gợi ý thêm): NẾU khách cần tư vấn thêm, khéo léo gợi ý phụ kiện.
 5. CLOSE (Chốt đơn): KHI KHÁCH ĐỒNG Ý MUA, nhảy thẳng đến bước này. BẮT BUỘC xin Tên và Địa chỉ giao hàng. Có đủ thông tin mới được gọi \`create_order\`.
 6. POST-SALE (Tóm tắt và Sau bán): Khi tạo đơn thành công, BẠN PHẢI TÓM TẮT LẠI thông tin đơn hàng (Tên SP, Tổng tiền, Tên người nhận, Địa chỉ) để khách kiểm tra. Sau đó cảm ơn và mời khách quét mã QR. Dùng \`log_feedback\` nếu có phản hồi.
+Quy tắc ứng xử quan trọng:
+1. Luôn lịch sự, xưng hô thân mật phù hợp (ví dụ: dạ, em, anh/chị...).
+2. Chỉ tư vấn và bán các sản phẩm có thực trong kho. TUYỆT ĐỐI không hứa hẹn hoặc giới thiệu các sản phẩm không tồn tại hoặc hết hàng. Luôn dùng công cụ \`check_inventory\` để xác thực trước khi trả lời về giá hoặc số lượng.
+3. Khi khách đồng ý mua, hãy hỏi rõ thông tin (tên sản phẩm, số lượng, địa chỉ ví nhận nếu cần) và gọi công cụ \`create_order\` để tạo đơn hàng.
+4. Sau khi tạo đơn hàng thành công, gọi ngay công cụ \`generate_payment_qr\` để lấy ảnh QR Code thanh toán Solana Pay, hiển thị thông tin này cho khách hàng và hướng dẫn họ dùng ví Phantom/Solflare (đã chuyển sang mạng Devnet) quét mã để hoàn tất.
+5. Luôn nhắc nhở khách rằng giao dịch được thanh toán bằng đồng USDC trên mạng Solana Devnet.
+6. Bạn là AI Agent bán hàng chính thức. TUYỆT ĐỐI không được chủ động giới thiệu, đề xuất khách hàng liên hệ nhân viên hỗ trợ hoặc tự ý chuyển giao cuộc nói chuyện sang người thật trừ khi khách hàng trực tiếp yêu cầu từ khóa khiếu nại hoặc trực tiếp đòi gặp người thật. Nếu khách hàng hỏi mua sản phẩm hoặc hỏi các câu thông thường, hãy kiên trì tư vấn và hướng dẫn đặt hàng.
+
+LƯU Ý QUAN TRỌNG: 
+- Khi gọi 'create_order', bạn phải tự lấy tên sản phẩm và giá tiền (amount) từ thông tin bạn đã kiểm tra trước đó trong lịch sử trò chuyện.
+- Nếu người dùng đồng ý mua (nói "có", "mua luôn"...), hãy thực hiện gọi 'create_order' ngay lập tức với các thông số đã biết.
 
 QUY TẮC LINH HOẠT (QUAN TRỌNG NHẤT):
 - Bạn KHÔNG bắt buộc phải đi tuần tự từ 1 đến 6. 
@@ -100,7 +116,7 @@ const executeTool = async (name, args) => {
       case 'create_order': {
         // Sinh reference key ngẫu nhiên dùng thư viện @solana/web3.js
         const referenceKey = Keypair.generate().publicKey.toBase58();
-        const sellerWallet = args.seller_wallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
+        const sellerWallet = args.seller_wallet || process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
 
         const newOrder = await createOrder({
           reference: referenceKey,
@@ -204,7 +220,11 @@ const checkEscalation = (text) => {
     'chuyen sang nguoi that', 'chuyển sang người thật',
     'nhan vien ho tro', 'nhân viên hỗ trợ',
     'support',
-    'noi voi nguoi that', 'nói với người thật'
+    'noi voi nguoi that',
+    'nói với người thật',
+    'yêu cầu nhân viên',
+    'gặp admin',
+    'chat với người thật'
   ];
   return escalationKeywords.some(keyword =>
     normalizedText.includes(normalize(keyword)) || rawText.includes(keyword)
@@ -305,7 +325,32 @@ const createMockOrder = (productName = 'Solana Mobile Saga v2', amount = 0.1) =>
   };
 };
 
-// ─── Xử lý Hội thoại (Core Chat Engine) ───────────────────────────────────────
+const parseReplyContent = (content) => {
+  if (!content) return { text_reply: '', function_call: null };
+
+  const regex = /<function=([^>]+)>([\s\S]*?)<\/function>/g;
+  let text_reply = content;
+  let function_call = null;
+
+  const match = regex.exec(content);
+  if (match) {
+    text_reply = content.replace(regex, '').trim();
+    const funcName = match[1].trim();
+    const funcArgsStr = match[2].trim();
+    let args = {};
+    try {
+      args = JSON.parse(funcArgsStr);
+    } catch (e) {
+      args = { raw: funcArgsStr };
+    }
+    function_call = {
+      name: funcName,
+      arguments: args
+    };
+  }
+
+  return { text_reply, function_call };
+};
 
 /**
  * Gửi tin nhắn và nhận phản hồi từ LLM
@@ -321,6 +366,7 @@ const chat = async (sessionId, userMessage) => {
     return {
       success: true,
       reply: "Dạ em xin lỗi vì sự bất tiện này. Em sẽ chuyển ngay cuộc trò chuyện này sang nhân viên hỗ trợ thực tế để xử lý nhanh nhất cho anh/chị ạ! 🙏",
+      function_call: null,
       escalate: true
     };
   }
@@ -341,7 +387,8 @@ const chat = async (sessionId, userMessage) => {
   if (groqApiKey) {
     apiKey = groqApiKey;
     apiUrl = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
-    modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+    // modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+    modelName = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
     console.log(`[AI Agent] 🚀 Sử dụng Groq API với Model: ${modelName}`);
   } else if (openaiApiKey) {
     apiKey = openaiApiKey;
@@ -403,6 +450,17 @@ const chat = async (sessionId, userMessage) => {
           try {
             const parsed = JSON.parse(toolResult);
             if (parsed.success) {
+              if (name === 'generate_payment_qr') {
+                qrCodeImage = parsed.qr_code;
+                orderId = parsed.order_id;
+              }
+            }
+          } catch (_) { }
+        }
+        if (name === 'create_order') {
+          try {
+            const parsed = JSON.parse(toolResult);
+            if (parsed.success) {
               if (parsed.qr_code) {
                 qrCodeImage = parsed.qr_code;
                 delete parsed.qr_code; // Xóa base64 khỏi góc nhìn của AI
@@ -449,11 +507,12 @@ const chat = async (sessionId, userMessage) => {
 
       // Xóa cú pháp <function=...> rác nếu LLM bịa ra trong text
       const cleanReply = assistantMessage.content.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
-
+      const { text_reply, function_call } = parseReplyContent(assistantMessage.content);
       return {
         success: true,
         reply: cleanReply,
-        escalate: checkEscalation(cleanReply),
+        function_call,
+        escalate: checkEscalation(userMessage),
         qrCodeImage,
         orderId,
         productName,
@@ -465,11 +524,12 @@ const chat = async (sessionId, userMessage) => {
 
       // Xóa cú pháp <function=...> rác nếu LLM bịa ra trong text
       const cleanReply = assistantMessage.content.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
-
+      const { text_reply, function_call } = parseReplyContent(assistantMessage.content);
       return {
         success: true,
         reply: cleanReply,
-        escalate: checkEscalation(cleanReply)
+        function_call,
+        escalate: checkEscalation(userMessage)
       };
     }
 
@@ -510,7 +570,7 @@ const generateAgoraToken = (channelName, uid) => {
     appId,
     appCertificate,
     channelName,
-    Number(uid) || 0,
+    Number(uid),
     role,
     privilegeExpiredTs
   );
@@ -608,16 +668,16 @@ NẾU KHÁCH YÊU CẦU ĐỔI THÔNG TIN (sửa tên, đổi địa chỉ, thê
         language: asrLanguage,
         ...(process.env.AZURE_SPEECH_KEY && {
           params: {
-            key: process.env.AZURE_SPEECH_KEY,
-            region: process.env.AZURE_SPEECH_REGION || "southeastasia"
+            voice_name: 'vi-VN-NamMinhNeural',
+            key: process.env.AZURE_TTS_KEY,
+            region: process.env.AZURE_TTS_REGION
           }
-        })
-      },
-      llm: {
+llm: {
         url: "https://api.groq.com/openai/v1/chat/completions",
         api_key: groqApiKey,
         system_messages: [{ role: "system", content: finalSystemPrompt }],
         params: { model: "llama-3.3-70b-versatile", max_tokens: 300 },
+        // Cấu hình MCP để AI dùng được các công cụ của bạn của bạn
         mcp_servers: [
           {
             name: "shoptalk",
@@ -630,7 +690,7 @@ NẾU KHÁCH YÊU CẦU ĐỔI THÔNG TIN (sửa tên, đổi địa chỉ, thê
         vendor: process.env.ELEVENLABS_API_KEY ? "elevenlabs" : "microsoft",
         params: process.env.ELEVENLABS_API_KEY
           ? {
-            voice_id: "EXAVITQu4vr4xnSDxMaL", // Giọng nữ Sarah (Free Premade)
+            voice_id: "EXAVITQu4vr4xnSDxMaL", // Giọng nữ Sarah
             key: process.env.ELEVENLABS_API_KEY
           }
           : {
@@ -640,38 +700,61 @@ NẾU KHÁCH YÊU CẦU ĐỔI THÔNG TIN (sửa tên, đổi địa chỉ, thê
               region: process.env.AZURE_SPEECH_REGION || "southeastasia"
             })
           }
+      },
+      // Thêm các thông số UX từ nhánh main
+      parameters: {
+        silence_config: {
+          action: 'think',
+          content: 'Dạ không biết anh chị còn ở đó không ạ?',
+          timeout_ms: 10000
+        }
+      },
+      idle_timeout: 120,
+      advanced_features: {
+        enable_tools: true, // Quan trọng để chạy MCP
+        enable_rtm: true
       }
-    }
-  };
+      }
+    };
 
   try {
     console.log(`[Agora] 📡 Starting agent "${agentName}" | Agent ID: "${agentId}" | Channel: "${channelName}" | ASR: ${asrLanguage}`);
     if (webhookUrl) console.log(`[Agora] 🔗 MCP Endpoint: ${webhookUrl}/mcp/sse?agent_id=${agentId}`);
 
-    const resp = await fetch(`https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      },
-      body: JSON.stringify(requestBody)
-    });
+    const response = await fetch(
+      `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      }
+    );
 
-    const result = await resp.json();
+    const data = await response.json();
 
+    if (!response.ok) {
+      console.error('[Agora] ❌ Lỗi gọi API Join:', JSON.stringify(data));
+      return { success: false, message: JSON.stringify(data), data };
+    }
+
+// Giữ lại phần Log thành công từ nhánh main (Rất hữu ích khi Demo để biết Agent đã sẵn sàng)
     if (resp.ok) {
       console.log(`[Agora] ✅ SUCCESS! Agent joined channel`);
-      console.log(`[Agora] 📥 Agent ID: ${result.agent_id}`);
+      console.log(`[Agora] 📥 Agora Agent ID: ${result.agent_id}`);
       console.log(`[Agora] 📥 Status: ${result.status}`);
     } else {
       console.error(`[Agora] ❌ FAILED (HTTP ${resp.status})`);
       console.error(`[Agora] Error:`, JSON.stringify(result, null, 2));
     }
 
+    // Trả về dữ liệu đầy đủ từ nhánh feature (Có agentId để quản lý MCP)
     return {
       success: resp.ok,
       agentName,
-      agentId,
+      agentId, // Quan trọng: ID này dùng để đồng bộ với MCP Server
       data: result
     };
   } catch (error) {
@@ -755,14 +838,12 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
     lowercaseMsg.includes('balo') ||
     lowercaseMsg.includes('sticker')
   ) {
-    // Xác định sản phẩm và giá từ tin nhắn
-    productName = 'Solana Mobile Saga v2 (Demo)';
-    amount = 0.1;
+    // 1. Xác định sản phẩm và giá từ tin nhắn
+    let productName = 'Solana Mobile Saga v2 (Demo)';
+    let amount = 0.1;
 
     if (lowercaseMsg.includes('saga phone') || lowercaseMsg.includes('saga v1') || (lowercaseMsg.includes('saga') && !lowercaseMsg.includes('v2'))) {
       productName = 'Solana Mobile Saga Phone'; amount = 499.99;
-    } else if (lowercaseMsg.includes('saga v2') || lowercaseMsg.includes('saga')) {
-      productName = 'Solana Mobile Saga v2'; amount = 0.1;
     } else if (lowercaseMsg.includes('ledger')) {
       productName = 'Ledger Nano S Plus'; amount = 79.00;
     } else if (lowercaseMsg.includes('tai nghe')) {
@@ -785,12 +866,37 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
       productName = 'Phantom Wallet Keychain'; amount = 6.00;
     }
 
-    // Tạo mock order — không cần DB hay Blockchain
-    const mockOrder = createMockOrder(productName, amount);
-    orderId = mockOrder.id;
-    qrCodeImage = mockOrder.qr_code;
+    // 2. Thực hiện tạo đơn hàng vào DB (Logic từ nhánh main)
+    try {
+      const referenceKey = Keypair.generate().publicKey.toBase58();
+      const newOrder = await createOrder({
+        reference: referenceKey,
+        product_name: productName,
+        amount: amount,
+        seller_wallet: process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
+        status: 'pending'
+      });
+      orderId = newOrder.id;
 
-    reply = `Dạ em đã tạo đơn hàng thành công cho anh/chị rồi ạ! 🎉
+      // Sinh luôn mã QR Code thanh toán
+      const paymentUrl = createPaymentRequest(newOrder);
+      qrCodeImage = await generateQRCode(paymentUrl);
+
+      reply = `Dạ em đã tạo đơn hàng thành công cho anh/chị rồi ạ! 
+- **Sản phẩm**: ${newOrder.product_name}
+- **Số tiền**: ${newOrder.amount} USDC (Devnet)
+- **Mã đơn hàng**: \`${newOrder.id}\`
+
+Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng dùng ví Phantom/Solflare quét mã này nhé!`;
+    } catch (err) {
+      console.warn('[AI Agent] Lỗi tạo đơn thực tế, chuyển sang chế độ mock order fallback:', err.message);
+      try {
+        // Tạo mock order — không cần DB hay Blockchain
+        const mockOrder = createMockOrder(productName, amount);
+        orderId = mockOrder.id;
+        qrCodeImage = mockOrder.qr_code;
+
+        reply = `Dạ em đã tạo đơn hàng thành công cho anh/chị rồi ạ! 🎉
 
 - 📦 **Sản phẩm**: ${mockOrder.product_name}
 - 💵 **Số tiền**: ${mockOrder.amount} USDC (Devnet)
@@ -799,6 +905,10 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
 📲 Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng mở ví **Phantom/Solflare** (nhớ chọn mạng **Devnet**) rồi quét mã này để hoàn tất thanh toán nhé!
 
 ⏰ Mã QR có hiệu lực trong **15 phút**, nếu hết hạn anh/chị có thể nhắn lại để em tạo mới ạ.`;
+      } catch (mockErr) {
+        reply = `Lỗi hệ thống khi tạo đơn hàng: ${err.message}`;
+      }
+    }
   }
 
   // ─── Hướng dẫn thanh toán ────────────────────────────────────────────────────
@@ -821,8 +931,6 @@ Anh/chị quan tâm sản phẩm nào ạ? 😊`;
 
 Nếu anh/chị cần hỗ trợ thêm cứ nhắn em nhé 😊`;
   }
-
-  // ─── Giới thiệu / Chào hỏi mặc định ────────────────────────────────────────
   else {
     reply = `Dạ cửa hàng **ShopTalk** xin chào anh/chị! 👋
 
@@ -848,9 +956,12 @@ Anh/chị cần em hỗ trợ gì ạ? 😊`;
 };
 
 module.exports = {
+  groq,
   chat,
   generateAgoraToken,
   startAgoraAgent,
   createMockOrder,
+  SYSTEM_PROMPT,
+  OPENAI_TOOLS,
   executeTool
 };

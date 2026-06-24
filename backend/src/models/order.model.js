@@ -81,6 +81,25 @@ const getOrderByReference = async (reference) => {
 };
 
 /**
+ * Lấy thông tin đơn hàng theo chữ ký giao dịch blockchain.
+ * @param {string} txSignature - Chữ ký giao dịch Solana
+ * @returns {Promise<Object|null>} Đơn hàng đã xử lý signature này hoặc null
+ */
+const getOrderByTxSignature = async (txSignature) => {
+  if (!txSignature) return null;
+
+  const queryText = 'SELECT * FROM orders WHERE tx_signature = $1;';
+
+  try {
+    const res = await db.query(queryText, [txSignature]);
+    return res.rows[0] || null;
+  } catch (error) {
+    console.error(`Lỗi trong getOrderByTxSignature với signature ${txSignature}:`, error.message);
+    throw error;
+  }
+};
+
+/**
  * Cập nhật trạng thái và chữ ký giao dịch của đơn hàng theo ID
  * @param {string} id - UUID của đơn hàng cần cập nhật
  * @param {string} status - Trạng thái mới ('pending', 'paid', 'expired', 'payment_mismatch')
@@ -88,10 +107,28 @@ const getOrderByReference = async (reference) => {
  * @returns {Promise<Object|null>} Đơn hàng đã cập nhật hoặc null nếu không tìm thấy đơn hàng
  */
 const updateOrderStatus = async (id, status, txSignature = null) => {
+  if (txSignature) {
+    const existingOrder = await getOrderByTxSignature(txSignature);
+    if (existingOrder) {
+      console.warn(`[Order] Bỏ qua cập nhật trùng tx_signature ${txSignature} cho đơn #${id}. Signature đã thuộc đơn #${existingOrder.id}`);
+      return null;
+    }
+  }
+
   const queryText = `
     UPDATE orders 
-    SET status = $2, tx_signature = COALESCE($3, tx_signature)
+    SET status = $2, tx_signature = COALESCE($3::varchar, tx_signature)
     WHERE id = $1
+      AND status <> 'paid'
+      AND (
+        $2 <> 'paid'
+        OR status IN ('pending', 'payment_mismatch', 'expired')
+      )
+      AND (
+        $3::varchar IS NULL
+        OR tx_signature IS NULL
+        OR tx_signature = $3::varchar
+      )
     RETURNING *;
   `;
   
@@ -155,13 +192,36 @@ const getPendingOrders = async () => {
   }
 };
 
+/**
+ * Lấy danh sách đơn hàng pending đã quá hạn thanh toán.
+ * @returns {Promise<Array>} Danh sách đơn pending có expires_at <= NOW()
+ */
+const getExpiredPendingOrders = async () => {
+  const queryText = `
+    SELECT * FROM orders
+    WHERE status = 'pending'
+      AND expires_at <= NOW()
+    ORDER BY expires_at ASC;
+  `;
+
+  try {
+    const res = await db.query(queryText);
+    return res.rows;
+  } catch (error) {
+    console.error('Lỗi trong getExpiredPendingOrders:', error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   createOrder,
   getOrderById,
   getOrderByReference,
+  getOrderByTxSignature,
   updateOrderStatus,
   getAllOrders,
   getPendingOrders,
+  getExpiredPendingOrders,
 };
 
 

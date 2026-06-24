@@ -9,7 +9,9 @@ const ordersRouter = require('./routes/orders.routes');
 const paymentRouter = require('./routes/payment.routes');
 const aiRouter = require('./routes/ai.routes');
 const agentToolsRouter = require('./routes/agent-tools.routes');
+const agoraRouter = require('./routes/agora.routes');
 const { startPaymentWatcher, stopPaymentWatcher } = require('./workers/paymentWatcher');
+const { startExpirationCron, stopExpirationCron } = require('./workers/expirationCron');
 
 const http = require('http');
 const { initSocket } = require('./websocket/socket.server');
@@ -33,8 +35,9 @@ app.use((req, res, next) => {
 // Đăng ký route quản lý đơn hàng
 app.use('/orders', ordersRouter);
 app.use('/payment', paymentRouter);
-app.use('/', aiRouter);
-app.use('/api', agentToolsRouter);
+app.use('/api/ai', aiRouter);
+app.use('/api/agora', agoraRouter);
+app.use('/api/agent-tools', agentToolsRouter);
 
 // Endpoint mặc định kiểm tra trạng thái hoạt động của Server
 app.get('/', (req, res) => {
@@ -57,12 +60,14 @@ server.listen(PORT, () => {
 
   // Khởi động Payment Watcher sau khi server đã sẵn sàng
   startPaymentWatcher();
+  startExpirationCron();
 });
 
 // Graceful shutdown — dừng watcher trước khi tắt process
 const shutdown = () => {
   console.log('\n[App] Đang tắt server...');
   stopPaymentWatcher();
+  stopExpirationCron();
   server.close(() => {
     console.log('[App] Server đã dừng hoàn toàn.');
     process.exit(0);

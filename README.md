@@ -29,7 +29,7 @@
 ### 3. Blockchain & Web3
 *   **Solana Integration:** `@solana/web3.js`, `@solana/pay`, `@solana/spl-token`.
 *   **Mạng thử nghiệm:** Solana Devnet.
-*   **Token thanh toán:** USDC Devnet (Mint: `4zMMC9srtvTEayvG2npWvQXm8R6C0Z5r2yM6V3JDncDU`).
+*   **Token thanh toán:** USDC Devnet (Mint: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`).
 
 ### 4. Giao tiếp Thời gian thực (Voice Channel)
 *   **Voice SDK:** Agora RTC (Thông qua thư viện `agora-token` trên backend để xác thực bảo mật).
