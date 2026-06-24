@@ -1,9 +1,10 @@
 import AgoraRTC from 'agora-rtc-sdk-ng';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import api from '../api';
 import QRModal from '../components/QRModal';
 import { useAgoraVoice } from '../hooks/useAgoraVoice';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 const mockMessages = [
   {
@@ -298,6 +299,23 @@ function ChatWidget() {
 
   // ── Voice call via Agora ──────────────────────────────────────────────────
   const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute } = useAgoraVoice(sessionId);
+
+  const handleVoiceOrderCreated = useCallback((data) => {
+    console.log('[Socket.io] Nhận sự kiện voice_order_created:', data);
+    setQrPayload({
+      qrCodeImage: data.qrCodeImage,
+      order: {
+        id: data.orderId,
+        product_name: data.productName,
+        amount: data.amount,
+        seller_wallet: data.sellerWallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ'
+      }
+    });
+  }, []);
+
+  useWebSocket({
+    voice_order_created: handleVoiceOrderCreated
+  });
 
   useEffect(() => {
     let savedSessionId = sessionStorage.getItem('shoptalk_session_id');

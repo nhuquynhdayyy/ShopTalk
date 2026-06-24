@@ -63,6 +63,119 @@ const cleanResponse = (groqData) => {
  * Handler xử lý Webhook từ Agora Conversational AI
  * Tối ưu cho Voice: Trả lời ngắn, không markdown, hỗ trợ Tools
  */
+/**
+ * Hàm gọi LLM để phân tích hội thoại voice
+ */
+const detectVoiceOrder = async (messages) => {
+  try {
+    const recentMessages = messages.filter(m => m.role !== 'system').slice(-30);
+    const prompt = `Phân tích lịch sử trò chuyện bằng giọng nói giữa khách hàng (user) và trợ lý bán hàng (assistant) để trích xuất thông tin đặt đơn hàng.
+Hãy trả về một đối tượng JSON duy nhất (không có mã markdown hay ký tự thừa nào khác ngoài JSON):
+{
+  "hasBuyIntent": <true/false, khách hàng đã xác nhận đồng ý/chốt mua hàng>,
+  "hasName": <true/false, khách hàng đã cung cấp tên người nhận cụ thể>,
+  "hasAddress": <true/false, khách hàng đã cung cấp địa chỉ giao hàng cụ thể>,
+  "productName": <tên sản phẩm khách chọn mua, ví dụ "Solana Mobile Saga v2", "Tai nghe TWS Blockchain Edition", hoặc null nếu không rõ>,
+  "amount": <giá sản phẩm (number), ví dụ 0.1, 35, hoặc null nếu không rõ>,
+  "customerName": <tên người nhận đã cung cấp, hoặc null nếu không rõ>,
+  "customerAddress": <địa chỉ giao hàng đã cung cấp, hoặc null nếu không rõ>
+}
+
+Bản đồ sản phẩm & giá mặc định để tham khảo:
+- "Solana Mobile Saga Phone": 0.1
+- "Solana Mobile Saga v2": 0.1
+- "ShopTalk T-Shirt": 0.1
+- "Ốp lưng Saga Phone trong suốt": 8.0
+- "Cáp sạc USB-C 1m": 5.0
+- "Củ sạc nhanh 65W GaN": 18.0
+- "Tai nghe TWS Blockchain Edition": 35.0
+- "Mũ lưỡi trai ShopTalk": 12.0
+- "Áo hoodie Crypto Dev": 28.0
+- "Ledger Nano S Plus": 79.0
+- "Sticker Pack Web3": 3.0
+- "Balo Laptop Crypto": 45.0
+- "Phantom Wallet Keychain": 6.0`;
+
+    const chatCompletion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: JSON.stringify(recentMessages.map(m => ({ role: m.role, content: m.content }))) }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1
+    });
+
+    const resultText = chatCompletion.choices[0]?.message?.content;
+    console.log(`[LLM Detect] Result: ${resultText}`);
+    return JSON.parse(resultText);
+  } catch (error) {
+    console.error('[LLM Detect] Lỗi phân tích đơn hàng qua voice:', error);
+    return null;
+  }
+};
+
+/**
+ * Hàm fallback phân tích hội thoại voice bằng regex/keywords
+ */
+const fallbackDetectVoiceOrder = (messages) => {
+  const allContent = messages.map(m => m.content).join(' ').toLowerCase();
+  const hasBuyIntent = allContent.includes('mua') || allContent.includes('đặt hàng') || allContent.includes('chốt') || allContent.includes('chot') || allContent.includes('order');
+  
+  let customerName = null;
+  let customerAddress = null;
+  let productName = 'Solana Mobile Saga v2';
+  let amount = 0.1;
+
+  if (allContent.includes('tai nghe')) {
+    productName = 'Tai nghe TWS Blockchain Edition';
+    amount = 35.0;
+  } else if (allContent.includes('ao thun') || allContent.includes('áo thun') || allContent.includes('t-shirt')) {
+    productName = 'ShopTalk T-Shirt';
+    amount = 0.1;
+  } else if (allContent.includes('hoodie')) {
+    productName = 'Áo hoodie Crypto Dev';
+    amount = 28.0;
+  } else if (allContent.includes('op lung') || allContent.includes('ốp lưng')) {
+    productName = 'Ốp lưng Saga Phone trong suốt';
+    amount = 8.0;
+  } else if (allContent.includes('cap sac') || allContent.includes('cáp sạc')) {
+    productName = 'Cáp sạc USB-C 1m';
+    amount = 5.0;
+  } else if (allContent.includes('ledger')) {
+    productName = 'Ledger Nano S Plus';
+    amount = 79.0;
+  }
+
+  for (let i = 0; i < messages.length - 1; i++) {
+    const current = messages[i];
+    const next = messages[i+1];
+    if (current.role === 'assistant' && next.role === 'user') {
+      const currentLower = current.content.toLowerCase();
+      if (currentLower.includes('tên người nhận') || currentLower.includes('cho em biết tên') || currentLower.includes('xin tên')) {
+        customerName = next.content.replace(/tên (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+      }
+      if (currentLower.includes('địa chỉ') || currentLower.includes('cho em biết địa chỉ') || currentLower.includes('xin địa chỉ')) {
+        customerAddress = next.content.replace(/địa chỉ (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+      }
+    }
+  }
+
+  return {
+    hasBuyIntent,
+    hasName: !!customerName,
+    hasAddress: !!customerAddress,
+    productName,
+    amount,
+    customerName,
+    customerAddress
+  };
+};
+
+/**
+ * Handler xử lý Webhook từ Agora Conversational AI
+ * Tối ưu cho Voice: Trả lời ngắn, không markdown, hỗ trợ Tools
+ */
 const llmWebhookHandler = async (req, res) => {
   try {
     const { messages: reqMessages, stream } = req.body;
@@ -90,12 +203,153 @@ const llmWebhookHandler = async (req, res) => {
       content: `QUAN TRỌNG - ĐÂY LÀ GIAO DIỆN GIỌNG NÓI:
 - Trả lời NGẮN GỌN, tối đa 2-3 câu ngắn
 - TUYỆT ĐỐI không viết backtick, markdown, code, tên function như check_inventory hay create_order
-- KHÔNG tự bịa thông tin sản phẩm, giá cả — chỉ nói những gì bạn thực sự biết
+- DANH SÁCH SẢN PHẨM & GIÁ CỦA CỬA HÀNG (TUYỆT ĐỐI nói đúng giá này):
+  + Solana Mobile Saga Phone (Saga v1): 0.1 USDC
+  + Solana Mobile Saga v2: 0.1 USDC
+  + ShopTalk T-Shirt: 0.1 USDC
+  + Ốp lưng Saga Phone trong suốt: 8 USDC
+  + Cáp sạc USB-C 1m: 5 USDC
+  + Củ sạc nhanh 65W GaN: 18 USDC
+  + Tai nghe TWS Blockchain Edition: 35 USDC
+  + Mũ lưỡi trai ShopTalk: 12 USDC
+  + Áo hoodie Crypto Dev: 28 USDC
+  + Ledger Nano S Plus: 79 USDC
+  + Sticker Pack Web3: 3 USDC
+  + Balo Laptop Crypto: 45 USDC
+  + Phantom Wallet Keychain: 6 USDC
 - Hỏi từng thông tin một: hỏi tên trước, sau đó mới hỏi địa chỉ, không hỏi cùng lúc
 - Chờ khách trả lời xong rồi mới phản hồi tiếp
-- Khi khách muốn mua, chỉ nói: "Dạ anh chị cho em biết tên người nhận hàng nhé"
-- Không được tự tạo đơn hàng hay QR trong voice — chỉ hướng dẫn khách nhắn tin vào chat`
+- Khi khách muốn mua/chốt đơn: hỏi tên người nhận hàng trước: "Dạ anh/chị cho em biết tên người nhận hàng nhé"
+- Sau khi có tên, tiếp tục hỏi địa chỉ nhận hàng: "Dạ anh/chị cho em biết địa chỉ nhận hàng nhé"
+- Khi đã nhận đủ tên và địa chỉ, trợ lý ảo sẽ dừng lại để hệ thống tạo đơn hàng.`
     });
+
+    // Kiểm tra xem khách đã đặt đơn chưa để tránh duplicate order
+    const allContentLower = messages.map(m => m.content).join(' ').toLowerCase();
+    const alreadyCreated = allContentLower.includes('da em da ghi nhan thong tin, anh chi vui long nhin vao cua so chat') ||
+                           allContentLower.includes('dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat');
+
+    if (!alreadyCreated) {
+      let detection = await detectVoiceOrder(messages);
+      if (!detection) {
+        detection = fallbackDetectVoiceOrder(messages);
+      } else {
+        const fallback = fallbackDetectVoiceOrder(messages);
+        if (!detection.customerName && fallback.customerName) {
+          detection.customerName = fallback.customerName;
+          detection.hasName = true;
+        }
+        if (!detection.customerAddress && fallback.customerAddress) {
+          detection.customerAddress = fallback.customerAddress;
+          detection.hasAddress = true;
+        }
+      }
+
+      if (detection && detection.hasBuyIntent && detection.hasName && detection.hasAddress) {
+        console.log('[LLM Webhook] Phát hiện đủ thông tin đặt hàng qua voice:', detection);
+
+        const { createOrder } = require('../models/order.model');
+        const { createPaymentRequest, generateQRCode } = require('../services/solanaPay.service');
+        const { Keypair } = require('@solana/web3.js');
+
+        const referenceKey = Keypair.generate().publicKey.toBase58();
+        const detectedProductName = detection.productName || 'Solana Mobile Saga v2';
+        const detectedAmount = detection.amount || 0.1;
+        const detectedName = detection.customerName || 'Khách mua qua Voice';
+        const detectedAddress = detection.customerAddress || 'Chưa cung cấp';
+
+        // Tạo đơn hàng
+        const order = await createOrder({
+          reference: referenceKey,
+          product_name: detectedProductName,
+          amount: detectedAmount,
+          seller_wallet: '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
+          status: 'pending',
+          customer_name: detectedName,
+          customer_address: detectedAddress
+        });
+
+        const paymentUrl = createPaymentRequest(order);
+        const qrCodeImage = await generateQRCode(paymentUrl);
+
+        // Emit WebSocket để frontend hiển thị QR
+        const { getIo } = require('../websocket/socket.server');
+        const io = getIo();
+        if (io) {
+          io.emit('voice_order_created', {
+            orderId: order.id,
+            productName: order.product_name,
+            amount: order.amount,
+            qrCodeImage,
+            customerName: detectedName,
+            sellerWallet: order.seller_wallet
+          });
+          console.log(`[Socket.io] 📢 Đã phát sự kiện 'voice_order_created' cho đơn #${order.id}`);
+        } else {
+          console.warn('[Socket.io] ⚠️ getIo() trả về null, không thể phát sự kiện voice_order_created');
+        }
+
+        const speakText = 'Dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat để xem mã QR thanh toán nhé!';
+
+        // Override response to stream/return the static speech
+        if (stream) {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+
+          const chunk1 = {
+            id: 'voice-order-' + Date.now(),
+            object: 'chat.completion.chunk',
+            created: Math.floor(Date.now() / 1000),
+            model: 'llama-3.3-70b-versatile',
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  content: speakText
+                },
+                finish_reason: null
+              }
+            ]
+          };
+          res.write(`data: ${JSON.stringify(chunk1)}\n\n`);
+
+          const chunk2 = {
+            id: 'voice-order-' + Date.now(),
+            object: 'chat.completion.chunk',
+            created: Math.floor(Date.now() / 1000),
+            model: 'llama-3.3-70b-versatile',
+            choices: [
+              {
+                index: 0,
+                delta: {},
+                finish_reason: 'stop'
+              }
+            ]
+          };
+          res.write(`data: ${JSON.stringify(chunk2)}\n\n`);
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
+        } else {
+          return res.json({
+            id: 'voice-order-' + Date.now(),
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: 'llama-3.3-70b-versatile',
+            choices: [{
+              message: {
+                role: 'assistant',
+                content: speakText
+              },
+              index: 0,
+              finish_reason: 'stop'
+            }],
+            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+          });
+        }
+      }
+    }
 
     console.log(`[LLM Webhook] Gọi Groq với ${messages.length} messages, stream=${!!stream}`);
 
