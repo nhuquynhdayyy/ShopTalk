@@ -1,3 +1,7 @@
+const Groq = require('groq-sdk');
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 const { Keypair } = require('@solana/web3.js');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const axios = require('axios');
@@ -46,13 +50,13 @@ const OPENAI_TOOLS = [
     type: "function",
     function: {
       name: "check_inventory",
-      description: "Kiểm tra tồn kho và giá bán của một sản phẩm từ database.",
+      description: "Kiểm tra tồn kho và giá bán của một sản phẩm.",
       parameters: {
         type: "object",
         properties: {
           product_name: {
             type: "string",
-            description: "Tên sản phẩm khách hàng đang quan tâm."
+            description: "Tên cụ thể của sản phẩm khách hỏi (ví dụ: 'Saga Phone', 'Balo', 'Tai nghe'). KHÔNG ĐƯỢC để trống."
           }
         },
         required: ["product_name"]
@@ -546,78 +550,92 @@ const generateAgoraToken = (channelName, uid) => {
  * @param {string} channelName - Tên kênh RTC
  * @param {number} agentUid - UID của AI Agent (ví dụ: 999)
  */
+// const startAgoraAgent = async (channelName, agentUid = 999) => {
+//   const appId = process.env.AGORA_APP_ID;
+//   const customerId = process.env.AGORA_CUSTOMER_ID;
+//   const customerSecret = process.env.AGORA_CUSTOMER_SECRET;
+//   const groqApiKey = process.env.GROQ_API_KEY;
+
+//   if (!appId || !customerId || !customerSecret) {
+//     console.error('[Agora] ❌ Thiếu thông tin cấu hình trong .env (AGORA_APP_ID, AGORA_CUSTOMER_ID, AGORA_CUSTOMER_SECRET)');
+//     return { success: false, message: 'Thiếu cấu hình Agora' };
+//   }
+
+//   // Kiểm tra BACKEND_PUBLIC_URL — Agora cần URL công khai để gọi webhook LLM
+//   const backendPublicUrl = process.env.BACKEND_PUBLIC_URL;
+//   if (!backendPublicUrl || backendPublicUrl.includes('localhost')) {
+//     console.error('[Agora] ❌ BACKEND_PUBLIC_URL chưa được cấu hình hoặc vẫn là localhost.');
+//     console.error('[Agora] ➡️  Hãy chạy: ngrok http 3000');
+//     console.error('[Agora] ➡️  Sau đó cập nhật BACKEND_PUBLIC_URL=https://xxxx.ngrok-free.app trong .env');
+//     return {
+//       success: false,
+//       message: 'BACKEND_PUBLIC_URL chưa được cấu hình. Agora cần URL công khai để gọi callback LLM. Hãy dùng ngrok: ngrok http 3000'
+//     };
+//   }
+
+//   // 1. Tạo Token cho Agent tham gia
+//   const token = generateAgoraToken(channelName, 999);
+//   const authHeader = 'Basic ' + Buffer.from(customerId + ':' + customerSecret).toString('base64');
+
+//   // Log an toàn
+//   const maskedId = customerId.slice(0, 4) + '...' + customerId.slice(-4);
+//   const maskedSecret = customerSecret.slice(0, 4) + '...' + customerSecret.slice(-4);
+//   console.log(`[Agora API] Auth: CustomerId=${maskedId}, Secret=${maskedSecret}`);
+
+//   // 2. LLM Webhook URL — Agora sẽ gọi về đây để lấy phản hồi AI
+//   const llmWebhookUrl = `${backendPublicUrl.replace(/\/$/, '')}/api/agora/llm-webhook`;
+//   console.log('[Check] Webhook URL gửi đi:', llmWebhookUrl);
+
+//   // v2 API endpoint — dùng agent_id top-level, để Dashboard Custom Config xử lý llm/asr/tts
+//   const apiUrl = `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`;
+
+//   // Cấu trúc body tối giản nhưng đầy đủ 'Vendor'
+//   const body = {
+//     agent_id: process.env.AGORA_AGENT_ID,
+//     properties: {
+//       channel: channelName,
+//       token: token,
+//       agent_rtc_uid: "999",
+//       remote_rtc_uids: ["*"],
+//       // Phải có định danh vendor dù dùng cấu hình Dashboard
+//       asr: { vendor: "ares" },
+//       tts: { vendor: "openai" }, 
+//       llm: { vendor: "openai" } 
+//     }
+//   };
+
+//   console.log('[Check] UID in Token: 999 | Channel:', channelName);
+//   console.log(`[Agora API] POST ${apiUrl}`);
+//   console.log(`[Agora API] Body (agent_id: ${body.agent_id}):`, JSON.stringify(body, null, 2));
+
+//   try {
+//     console.log(`[Agora] 📡 Gửi request start agent join channel "${channelName}"...`);
+//     const response = await axios.post(apiUrl, body, {
+//       headers: {
+//         'Content-Type': 'application/json',
+//         'Authorization': authHeader
+//       }
+//     });
+//     console.log(`[Agora] 🚀 Mời AI Agent thành công! Response:`, JSON.stringify(response.data));
+//     return { success: true, data: response.data };
+//   } catch (error) {
+//     const errorMsg = error.response ? JSON.stringify(error.response.data) : error.message;
+//     console.error('[Agora] ❌ Lỗi gọi API Join:', errorMsg);
+//     return { success: false, message: errorMsg };
+//   }
+// };
+// Hàm startAgoraAgent — Agent Studio tự quản lý, không cần gọi REST API join
+// Chỉ cần xác nhận channel hợp lệ và trả về success
 const startAgoraAgent = async (channelName, agentUid = 999) => {
-  const appId = process.env.AGORA_APP_ID;
-  const customerId = process.env.AGORA_CUSTOMER_ID;
-  const customerSecret = process.env.AGORA_CUSTOMER_SECRET;
-  const groqApiKey = process.env.GROQ_API_KEY;
-
-  if (!appId || !customerId || !customerSecret) {
-    console.error('[Agora] ❌ Thiếu thông tin cấu hình trong .env (AGORA_APP_ID, AGORA_CUSTOMER_ID, AGORA_CUSTOMER_SECRET)');
-    return { success: false, message: 'Thiếu cấu hình Agora' };
-  }
-
-  // Kiểm tra BACKEND_PUBLIC_URL — Agora cần URL công khai để gọi webhook LLM
-  const backendPublicUrl = process.env.BACKEND_PUBLIC_URL;
-  if (!backendPublicUrl || backendPublicUrl.includes('localhost')) {
-    console.error('[Agora] ❌ BACKEND_PUBLIC_URL chưa được cấu hình hoặc vẫn là localhost.');
-    console.error('[Agora] ➡️  Hãy chạy: ngrok http 3000');
-    console.error('[Agora] ➡️  Sau đó cập nhật BACKEND_PUBLIC_URL=https://xxxx.ngrok-free.app trong .env');
-    return {
-      success: false,
-      message: 'BACKEND_PUBLIC_URL chưa được cấu hình. Agora cần URL công khai để gọi callback LLM. Hãy dùng ngrok: ngrok http 3000'
-    };
-  }
-
-  // 1. Tạo Token cho Agent tham gia
-  const token = generateAgoraToken(channelName, 999);
-  const authHeader = 'Basic ' + Buffer.from(customerId + ':' + customerSecret).toString('base64');
-
-  // Log an toàn
-  const maskedId = customerId.slice(0, 4) + '...' + customerId.slice(-4);
-  const maskedSecret = customerSecret.slice(0, 4) + '...' + customerSecret.slice(-4);
-  console.log(`[Agora API] Auth: CustomerId=${maskedId}, Secret=${maskedSecret}`);
-
-  // 2. LLM Webhook URL — Agora sẽ gọi về đây để lấy phản hồi AI
-  const llmWebhookUrl = `${backendPublicUrl.replace(/\/$/, '')}/api/agora/llm-webhook`;
-  console.log('[Check] Webhook URL gửi đi:', llmWebhookUrl);
-
-  // v2 API endpoint — dùng agent_id top-level, để Dashboard Custom Config xử lý llm/asr/tts
-  const apiUrl = `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`;
-
-  // Cấu trúc body tối giản nhưng đầy đủ 'Vendor'
-  const body = {
-    agent_id: process.env.AGORA_AGENT_ID,
-    properties: {
-      channel: channelName,
-      token: token,
-      agent_rtc_uid: "999",
-      remote_rtc_uids: ["*"],
-      // Phải có định danh vendor dù dùng cấu hình Dashboard
-      asr: { vendor: "ares" },
-      tts: { vendor: "openai" }, 
-      llm: { vendor: "openai" } 
-    }
-  };
-
-  console.log('[Check] UID in Token: 999 | Channel:', channelName);
-  console.log(`[Agora API] POST ${apiUrl}`);
-  console.log(`[Agora API] Body (agent_id: ${body.agent_id}):`, JSON.stringify(body, null, 2));
-
   try {
-    console.log(`[Agora] 📡 Gửi request start agent join channel "${channelName}"...`);
-    const response = await axios.post(apiUrl, body, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      }
-    });
-    console.log(`[Agora] 🚀 Mời AI Agent thành công! Response:`, JSON.stringify(response.data));
-    return { success: true, data: response.data };
+    console.log(`[Agora] Agent Studio sẽ tự join kênh: ${channelName}`);
+    // Không cần gọi API gì — Agent Studio detect khi có user join channel
+    return {
+      success: true,
+      data: { channelName, agentUid }
+    };
   } catch (error) {
-    const errorMsg = error.response ? JSON.stringify(error.response.data) : error.message;
-    console.error('[Agora] ❌ Lỗi gọi API Join:', errorMsg);
-    return { success: false, message: errorMsg };
+    return { success: false, message: error.message };
   }
 };
 
@@ -764,15 +782,15 @@ Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng dùng 
 
   // ─── Hướng dẫn thanh toán ────────────────────────────────────────────────────
   else if (
-  lowercaseMsg.includes('thanh toán') ||
-  lowercaseMsg.includes('thanh toan') ||
-  lowercaseMsg.includes('chuyển tiền') ||
-  lowercaseMsg.includes('chuyen tien') ||
-  lowercaseMsg.includes('qr') ||
-  lowercaseMsg.includes('phantom') ||
-  lowercaseMsg.includes('solflare')
-) {
-  reply = `Dạ để thanh toán anh/chị làm theo các bước sau nhé:
+    lowercaseMsg.includes('thanh toán') ||
+    lowercaseMsg.includes('thanh toan') ||
+    lowercaseMsg.includes('chuyển tiền') ||
+    lowercaseMsg.includes('chuyen tien') ||
+    lowercaseMsg.includes('qr') ||
+    lowercaseMsg.includes('phantom') ||
+    lowercaseMsg.includes('solflare')
+  ) {
+    reply = `Dạ để thanh toán anh/chị làm theo các bước sau nhé:
 
 1️⃣ Mở app **Phantom** hoặc **Solflare** trên điện thoại
 2️⃣ Chuyển sang mạng **Devnet** (vào Settings → Network → Devnet)
@@ -781,9 +799,9 @@ Dưới đây là mã QR Code thanh toán Solana Pay. Anh/chị vui lòng dùng 
 5️⃣ Xác nhận giao dịch — tiền sẽ chuyển trong vài giây!
 
 Nếu anh/chị cần hỗ trợ thêm cứ nhắn em nhé 😊`;
-}
-else {
-  reply = `Dạ cửa hàng **ShopTalk** xin chào anh/chị! 👋
+  }
+  else {
+    reply = `Dạ cửa hàng **ShopTalk** xin chào anh/chị! 👋
 
 Em là trợ lý AI bán hàng tự động của ShopTalk. Em có thể giúp anh/chị:
 - 🔍 **Xem danh sách sản phẩm** (gõ: "xem hàng" hoặc "có gì bán")
@@ -791,22 +809,26 @@ Em là trợ lý AI bán hàng tự động của ShopTalk. Em có thể giúp a
 - 💳 **Hướng dẫn thanh toán** USDC qua Solana Pay
 
 Anh/chị cần em hỗ trợ gì ạ? 😊`;
-}
+  }
 
-sessionMessages.push({ role: 'assistant', content: reply });
+  sessionMessages.push({ role: 'assistant', content: reply });
 
-return {
-  success: true,
-  reply,
-  escalate: false,
-  qrCodeImage,
-  orderId
-};
+  return {
+    success: true,
+    reply,
+    escalate: false,
+    qrCodeImage,
+    orderId
+  };
 };
 
 module.exports = {
+  groq,
   chat,
   generateAgoraToken,
   startAgoraAgent,
-  createMockOrder
+  createMockOrder,
+  SYSTEM_PROMPT,
+  OPENAI_TOOLS,
+  executeTool
 };

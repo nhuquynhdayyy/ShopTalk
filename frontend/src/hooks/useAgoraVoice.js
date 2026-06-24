@@ -47,7 +47,7 @@ export function useShoAgoraVoice(channelName) {
       }
 
       // 2. Create Agora RTC client
-      const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'h264' });
       clientRef.current = client;
 
       // Handle connection state changes
