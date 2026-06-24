@@ -9,7 +9,7 @@
     "test:agora": "node test-agora-voice.js",
     "test:ai": "node test-ai.js",
     "test:order": "node test-order.js",
-    "test:bank": "node test-verify-service.js && node test-verify-nonfinalized.js && node test-order-idempotency.js && node test-order-paid-lock.js && node test-payment-watcher-mismatch.js && node test-payment-watcher-rate-limit.js && node test-expiration-cron.js"
+    "test:bank": "node test-verify-service.js && node test-verify-nonfinalized.js && node test-order-idempotency.js && node test-order-paid-lock.js && node test-payment-watcher-mismatch.js && node test-payment-watcher-rate-limit.js && node test-expiration-cron.js && node test-socket-events.js && node test-payment-watcher-order-paid.js && node test-payment-reminder.js && node test-escalation-worker.js && node test-transcript-received.js"
   },
   "dependencies": {
     "@solana/pay": "^0.2.1",

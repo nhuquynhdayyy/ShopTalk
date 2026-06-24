@@ -12,6 +12,7 @@ const agentToolsRouter = require('./routes/agent-tools.routes');
 const agoraRouter = require('./routes/agora.routes');
 const { startPaymentWatcher, stopPaymentWatcher } = require('./workers/paymentWatcher');
 const { startExpirationCron, stopExpirationCron } = require('./workers/expirationCron');
+const { startPaymentReminderWorker, stopPaymentReminderWorker } = require('./workers/paymentReminder.worker');
 
 const http = require('http');
 const { initSocket } = require('./websocket/socket.server');
@@ -55,6 +56,7 @@ server.listen(PORT, () => {
   // Khởi động Payment Watcher sau khi server đã sẵn sàng
   startPaymentWatcher();
   startExpirationCron();
+  startPaymentReminderWorker();
 });
 
 // Graceful shutdown — dừng watcher trước khi tắt process
@@ -62,6 +64,7 @@ const shutdown = () => {
   console.log('\n[App] Đang tắt server...');
   stopPaymentWatcher();
   stopExpirationCron();
+  stopPaymentReminderWorker();
   server.close(() => {
     console.log('[App] Server đã dừng hoàn toàn.');
     process.exit(0);

@@ -214,6 +214,54 @@ const getExpiredPendingOrders = async () => {
   }
 };
 
+/**
+ * Láº¥y cÃ¡c Ä‘Æ¡n pending Ä‘Ã£ chá» tá»‘i thiá»ƒu N phÃºt vÃ  chÆ°a gá»­i nháº¯c thanh toÃ¡n.
+ * @param {number} minutesWaiting - Sá»‘ phÃºt chá» trÆ°á»›c khi nháº¯c thanh toÃ¡n
+ * @returns {Promise<Array>} Danh sÃ¡ch Ä‘Æ¡n cáº§n nháº¯c thanh toÃ¡n
+ */
+const getPaymentReminderCandidates = async (minutesWaiting = 5) => {
+  const queryText = `
+    SELECT * FROM orders
+    WHERE status = 'pending'
+      AND payment_reminded_at IS NULL
+      AND created_at <= NOW() - ($1::int * INTERVAL '1 minute')
+      AND expires_at > NOW()
+    ORDER BY created_at ASC;
+  `;
+
+  try {
+    const res = await db.query(queryText, [minutesWaiting]);
+    return res.rows;
+  } catch (error) {
+    console.error('Lá»—i trong getPaymentReminderCandidates:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * ÄÃ¡nh dáº¥u Ä‘Æ¡n hÃ ng Ä‘Ã£ gá»­i nháº¯c thanh toÃ¡n.
+ * @param {string} id - UUID cá»§a Ä‘Æ¡n hÃ ng
+ * @returns {Promise<Object|null>} ÄÆ¡n hÃ ng Ä‘Ã£ cáº­p nháº­t hoáº·c null
+ */
+const markPaymentReminderSent = async (id) => {
+  const queryText = `
+    UPDATE orders
+    SET payment_reminded_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+      AND status = 'pending'
+      AND payment_reminded_at IS NULL
+    RETURNING *;
+  `;
+
+  try {
+    const res = await db.query(queryText, [id]);
+    return res.rows[0] || null;
+  } catch (error) {
+    console.error(`Lá»—i trong markPaymentReminderSent vá»›i ID ${id}:`, error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   createOrder,
   getOrderById,
@@ -223,6 +271,8 @@ module.exports = {
   getAllOrders,
   getPendingOrders,
   getExpiredPendingOrders,
+  getPaymentReminderCandidates,
+  markPaymentReminderSent,
 };
 
 
