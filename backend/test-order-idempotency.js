@@ -77,30 +77,23 @@ test('updateOrderStatus: tx_signature đã được dùng bởi ĐƠN KHÁC -> c
 
 // ─── Test 3: tx_signature giống nhau NHƯNG cùng 1 đơn (gọi lại idempotent) -> vẫn cho qua ──
 
-test('[BUG TIỀM ẨN] updateOrderStatus: poll lại CÙNG đơn với CÙNG tx_signature (watcher retry) -> code hiện tại trả null, dù về nghiệp vụ đây là idempotent retry hợp lệ', async () => {
+test('updateOrderStatus: poll lại CÙNG đơn với CÙNG tx_signature (watcher retry) -> cho phép chạy UPDATE query để xử lý idempotent', async () => {
+  let updateQueryRan = false;
   const orderModel = freshOrderModel({
     queryImpl: async (sql, params) => {
       if (sql.includes('SELECT * FROM orders WHERE tx_signature')) {
         // Signature thuộc CHÍNH đơn đang được update (order-1), không phải đơn khác
-        return { rows: [{ id: 'order-1', tx_signature: params[0] }] };
+        return { rows: [{ id: 'order-1', tx_signature: params[0], status: 'pending' }] };
       }
-      throw new Error('Không nên chạm tới UPDATE query — phải bị chặn ngay ở bước check signature');
+      updateQueryRan = true;
+      return { rows: [{ id: 'order-1', status: 'paid', tx_signature: params[2] }] };
     },
   });
 
   const result = await orderModel.updateOrderStatus('order-1', 'paid', 'sig-abc');
 
-  // Khẳng định CHÍNH XÁC behavior thật hiện tại: luôn trả null khi signature đã tồn tại,
-  // KHÔNG phân biệt "thuộc đơn khác" vs "thuộc chính đơn này".
-  assert.strictEqual(
-    result,
-    null,
-    'Code hiện tại (updateOrderStatus) trả null trong trường hợp này vì getOrderByTxSignature() ' +
-    'không phân biệt được "signature thuộc đơn khác" và "signature thuộc chính đơn đang update". ' +
-    'Đây là ĐIỂM CẦN TEAM XÁC NHẬN: nếu watcher retry/poll lại đúng đơn đã verify (network lag, ' +
-    '2 worker instance chạy song song), hàm sẽ báo thất bại dù về nghiệp vụ đây là idempotent — ' +
-    'không phải lỗi trùng signature thật. Đề xuất sửa: so sánh existingOrder.id !== id trước khi return null.'
-  );
+  assert.strictEqual(updateQueryRan, true, 'Nên chạy câu UPDATE query khi signature thuộc chính đơn này');
+  assert.strictEqual(result.status, 'paid');
 });
 
 // ─── Test 4: update status khác "paid" (ví dụ payment_mismatch) -> không cần check tx_signature trùng nếu không truyền sig ──

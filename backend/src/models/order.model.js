@@ -110,7 +110,7 @@ const getOrderByTxSignature = async (txSignature) => {
 const updateOrderStatus = async (id, status, txSignature = null) => {
   if (txSignature) {
     const existingOrder = await getOrderByTxSignature(txSignature);
-    if (existingOrder) {
+    if (existingOrder && existingOrder.id !== id) {
       console.warn(`[Order] Bỏ qua cập nhật trùng tx_signature ${txSignature} cho đơn #${id}. Signature đã thuộc đơn #${existingOrder.id}`);
       return null;
     }
