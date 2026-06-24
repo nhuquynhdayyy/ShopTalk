@@ -1,21 +1,23 @@
 const assert = require('assert');
 const path = require('path');
 
-const orderModelPath = path.resolve(__dirname, 'src/models/order.model.js');
-const updates = [];
+const dbPath = path.resolve(__dirname, 'src/config/db.js');
+const queries = [];
 
-require.cache[orderModelPath] = {
-  id: orderModelPath,
-  filename: orderModelPath,
+require.cache[dbPath] = {
+  id: dbPath,
+  filename: dbPath,
   loaded: true,
   exports: {
-    getExpiredPendingOrders: async () => [
-      { id: 'expired-order-1' },
-      { id: 'expired-order-2' },
-    ],
-    updateOrderStatus: async (id, status) => {
-      updates.push({ id, status });
-      return { id, status };
+    query: async (queryText) => {
+      queries.push(queryText);
+      return {
+        rowCount: 2,
+        rows: [
+          { id: 'expired-order-1' },
+          { id: 'expired-order-2' },
+        ],
+      };
     },
   },
 };
@@ -30,10 +32,10 @@ const { runExpirationSweep } = require('./src/workers/expirationCron');
     expiredCount: 2,
   });
 
-  assert.deepStrictEqual(updates, [
-    { id: 'expired-order-1', status: 'expired' },
-    { id: 'expired-order-2', status: 'expired' },
-  ]);
+  assert.strictEqual(queries.length, 1);
+  assert.ok(queries[0].includes("SET status = 'expired'"));
+  assert.ok(queries[0].includes("WHERE status = 'pending'"));
+  assert.ok(queries[0].includes('expires_at <= NOW()'));
 
   console.log('PASS expirationCron expired pending orders case');
 })();

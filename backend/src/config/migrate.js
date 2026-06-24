@@ -81,6 +81,7 @@ async function runMigration() {
         seller_wallet VARCHAR(255) NOT NULL,
         status VARCHAR(50) DEFAULT 'pending' NOT NULL,
         tx_signature VARCHAR(255),
+        payment_reminded_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '15 minutes'),
         customer_name VARCHAR(255),
@@ -92,6 +93,7 @@ async function runMigration() {
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255);
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_address TEXT;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS items_list JSONB;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_reminded_at TIMESTAMP WITH TIME ZONE;
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_tx_signature_unique
         ON orders (tx_signature)
@@ -100,6 +102,8 @@ async function runMigration() {
         ON orders (status, expires_at);
       CREATE INDEX IF NOT EXISTS idx_orders_status_created_at
         ON orders (status, created_at);
+      CREATE INDEX IF NOT EXISTS idx_orders_payment_reminder
+        ON orders (status, payment_reminded_at, created_at);
     `);
     console.log('✅ Xong: Bảng "orders" đã được thiết lập.');
 

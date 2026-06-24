@@ -11,6 +11,7 @@
 
 const { getPendingOrders, updateOrderStatus } = require('../models/order.model');
 const { verifyPayment } = require('../services/verify.service');
+const { emitOrderPaid } = require('../websocket/socket.server');
 
 // ─── Cấu hình ───────────────────────────────────────────────────────────────
 
@@ -64,8 +65,11 @@ const runOnePoll = async () => {
 
         if (result.success) {
           // ✅ Thanh toán thành công — cập nhật DB ngay lập tức
-          await updateOrderStatus(order.id, 'paid', result.signature);
-          logSuccess(order.id, result.signature);
+          const updatedOrder = await updateOrderStatus(order.id, 'paid', result.signature);
+          if (updatedOrder) {
+            emitOrderPaid(updatedOrder);
+            logSuccess(order.id, result.signature);
+          }
         } else if (result.error === 'PAYMENT_MISMATCH') {
           await updateOrderStatus(order.id, 'payment_mismatch', result.signature || null);
           console.warn(
