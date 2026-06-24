@@ -453,7 +453,7 @@ const chat = async (sessionId, userMessage) => {
               if (name === 'generate_payment_qr') {
                 qrCodeImage = parsed.qr_code;
                 orderId = parsed.order_id;
-              }   
+              }
             }
           } catch (_) { }
         }
@@ -588,119 +588,107 @@ const generateAgoraToken = (channelName, uid) => {
  * @param {string} sessionId - ID phiên chat text để đồng bộ ngữ cảnh (Context Sync)
  */
 const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', sessionId = null) => {
-  const appId = process.env.AGORA_APP_ID;
-  const customerId = process.env.AGORA_CUSTOMER_ID;
-  const customerSecret = process.env.AGORA_CUSTOMER_SECRET;
-  const groqApiKey = process.env.GROQ_API_KEY;
-  const webhookUrl = process.env.WEBHOOK_URL;
-
-  if (!appId || !customerId || !customerSecret) {
-    console.warn('[Agora] ⚠️ Thiếu thông tin xác thực Agora REST API trong .env. Bỏ qua gọi API thực tế.');
-    return {
-      success: false,
-      message: 'Thiếu credentials Agora để gọi API thực tế. Hãy điền AGORA_CUSTOMER_ID và AGORA_CUSTOMER_SECRET.'
-    };
-  }
-
-  if (!groqApiKey) {
-    console.warn('[Agora] ⚠️ Thiếu GROQ_API_KEY trong .env. Agent sẽ không thể sử dụng LLM.');
-  }
-
-  const isEnglish = language === 'en';
-  const asrLanguage = isEnglish ? "en-US" : "vi-VN";
-  const ttsVoice = isEnglish ? "en-US-AriaNeural" : "vi-VN-HoaiMyNeural";
-  const systemPrompt = isEnglish
-    ? "You are a sales assistant. Be brief and helpful."
-    : "Bạn là nhân viên bán hàng. Nói ngắn gọn, hữu ích.";
-
-  // Tạo Token cho Agent
-  const tokenData = generateAgoraToken(channelName, agentUid);
-  const token = typeof tokenData === 'string' ? tokenData : tokenData.token;
-
-  // Encode Basic Auth
-  const authHeader = 'Basic ' + Buffer.from(`${customerId}:${customerSecret}`).toString('base64');
-
-  // Tên agent unique
-  const agentName = `shoptalk-${channelName}-${Date.now()}`;
-
-  // Request body theo Agora API v2 flat format (đúng spec)
-  const requestBody = {
-    name: agentName,
-    properties: {
-      channel: channelName,
-      token: token,
-      agent_rtc_uid: String(agentUid),
-      remote_rtc_uids: ["*"],
-      asr: {
-        vendor: process.env.AZURE_SPEECH_KEY ? "microsoft" : "ares",
-        language: asrLanguage,
-        ...(process.env.AZURE_SPEECH_KEY && {
-          params: {
-            key: process.env.AZURE_SPEECH_KEY,
-            region: process.env.AZURE_SPEECH_REGION || "southeastasia"
-          }
-        })
-      },
-      llm: {
-        url: "https://api.groq.com/openai/v1/chat/completions",
-        api_key: groqApiKey,
-        system_messages: [{ role: "system", content: systemPrompt }],
-        params: { model: "llama-3.1-8b-instant", max_tokens: 300 }
-      },
-      tts: {
-        vendor: process.env.ELEVENLABS_API_KEY ? "elevenlabs" : "microsoft",
-        params: process.env.ELEVENLABS_API_KEY 
-          ? {
-              voice_id: "EXAVITQu4vr4xnSDxMaL", // Giọng nữ Sarah (Free Premade)
-              key: process.env.ELEVENLABS_API_KEY
-            }
-          : { 
-              voice_name: ttsVoice,
-              ...(process.env.AZURE_SPEECH_KEY && {
-                key: process.env.AZURE_SPEECH_KEY,
-                region: process.env.AZURE_SPEECH_REGION || "southeastasia"
-              })
-            }
-      }
-    }
-  };
-
   try {
-    console.log(`[Agora] 📡 Starting agent "${agentName}" | Channel: "${channelName}" | ASR: ${asrLanguage}`);
-    if (webhookUrl) console.log(`[Agora] 🔗 Webhook: ${webhookUrl}/api/agent-tools`);
+    const appId = process.env.AGORA_APP_ID;
+    const customerId = process.env.AGORA_CUSTOMER_ID;
+    const customerSecret = process.env.AGORA_CUSTOMER_SECRET;
+    const ngrokUrl = process.env.NGROK_URL;
 
-    const resp = await fetch(`https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      },
-      body: JSON.stringify(requestBody)
-    });
+    const agentName = `shoptalk-${channelName.slice(0, 8)}-${Date.now()}`;
 
-    const result = await resp.json();
+    // Sinh token cho agent
+    const { RtcTokenBuilder, RtcRole } = require('agora-token');
+    const privilegeExpiredTs = Math.floor(Date.now() / 1000) + 3600;
+    const agentToken = RtcTokenBuilder.buildTokenWithUid(
+      appId,
+      process.env.AGORA_APP_CERTIFICATE,
+      channelName,
+      agentUid,
+      RtcRole.PUBLISHER,
+      privilegeExpiredTs
+    );
 
-    if (resp.ok) {
-      console.log(`[Agora] ✅ SUCCESS! Agent joined channel`);
-      console.log(`[Agora] 📥 Agent ID: ${result.agent_id}`);
-      console.log(`[Agora] 📥 Status: ${result.status}`);
-    } else {
-      console.error(`[Agora] ❌ FAILED (HTTP ${resp.status})`);
-      console.error(`[Agora] Error:`, JSON.stringify(result, null, 2));
+    const credentials = Buffer.from(`${customerId}:${customerSecret}`).toString('base64');
+
+    // KHÔNG dùng pipeline_id — dùng config độc lập hoàn toàn
+    const body = {
+      name: agentName,
+      properties: {
+        channel: channelName,
+        token: agentToken,
+        agent_rtc_uid: String(agentUid),
+        remote_rtc_uids: ['*'],
+        enable_string_uid: false,
+        asr: {
+          vendor: 'ares',
+          language: 'vi-VN',
+          params: {}
+        },
+        llm: {
+          vendor: 'custom',
+          url: `${ngrokUrl}/api/agora/llm-webhook`,
+          params: { model: 'llama-3.1-8b-instant' },
+          failure_message: 'Dạ, em xin lỗi, đường truyền đang gặp chút vấn đề. Anh chị vui lòng đợi em một xíu ạ.',
+          greeting_message: 'Dạ, ShopTalk xin chào anh/chị! Em là nhân viên tư vấn ảo của cửa hàng. Anh chị đang quan tâm đến mẫu điện thoại Solana Saga hay phụ kiện nào bên em ạ?',
+          system_messages: [
+            { role: 'system', content: SYSTEM_PROMPT }
+          ]
+        },
+        tts: {
+          vendor: 'microsoft',
+          credential_name: 'Azure_Voice',
+          params: {
+            voice_name: 'vi-VN-NamMinhNeural',
+            key: process.env.AZURE_TTS_KEY,
+            region: process.env.AZURE_TTS_REGION
+          }
+        },
+        parameters: {
+          silence_config: {
+            action: 'think',
+            content: 'Dạ không biết anh chị còn ở đó không ạ?',
+            timeout_ms: 10000
+          }
+        },
+        idle_timeout: 120,
+        advanced_features: {
+          enable_rtm: true,
+          enable_sal: false
+        }
+      }
+    };
+
+    console.log(`[Agora] 📡 Starting agent "${agentName}" | Channel: "${channelName}" | ASR: vi-VN`);
+    console.log(`[Agora] 🔗 LLM Webhook: ${ngrokUrl}/api/agora/llm-webhook`);
+
+    const response = await fetch(
+      `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/join`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[Agora] ❌ Lỗi gọi API Join:', JSON.stringify(data));
+      return { success: false, message: JSON.stringify(data), data };
     }
 
-    return {
-      success: resp.ok,
-      agentName,
-      data: result
-    };
+    console.log(`[Agora] ✅ SUCCESS! Agent joined channel`);
+    console.log(`[Agora] 📥 Agent ID: ${data.agent_id}`);
+    console.log(`[Agora] 📥 Status: ${data.status}`);
+
+    return { success: true, agentName, data };
+
   } catch (error) {
     console.error('[Agora] ❌ Exception:', error.message);
-    return {
-      success: false,
-      agentName,
-      message: error.message
-    };
+    return { success: false, message: error.message };
   }
 };
 

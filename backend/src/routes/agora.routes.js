@@ -64,53 +64,87 @@ const cleanResponse = (groqData) => {
  */
 const llmWebhookHandler = async (req, res) => {
   try {
-    const { messages: reqMessages } = req.body;
+    const { messages: reqMessages, stream } = req.body;
     if (!reqMessages) return res.status(400).json({ error: 'No messages' });
 
-    let messages = [...reqMessages];
+    // Lọc metadata
+    let messages = reqMessages.map(msg => {
+      const clean = { role: msg.role, content: msg.content || '' };
+      if (msg.tool_calls) clean.tool_calls = msg.tool_calls;
+      if (msg.tool_call_id) {
+        clean.tool_call_id = msg.tool_call_id;
+        clean.name = msg.name;
+      }
+      return clean;
+    });
+
     if (!messages.some(msg => msg.role === 'system')) {
       messages.unshift({ role: 'system', content: SYSTEM_PROMPT });
     }
 
-    // GỌI GROQ LẦN 1
-    const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: messages,
-      tools: OPENAI_TOOLS,
-      tool_choice: 'auto'
-    });
+    console.log(`[LLM Webhook] Gọi Groq với ${messages.length} messages, stream=${!!stream}`);
 
-    let assistantMessage = response.choices[0].message;
+    // Nếu Agora yêu cầu stream=true thì phải trả về SSE
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
 
-    // XỬ LÝ TOOL CALLING (Check kho / Tạo đơn)
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      messages.push(assistantMessage);
-
-      for (const toolCall of assistantMessage.tool_calls) {
-        const result = await executeTool(toolCall.function.name, JSON.parse(toolCall.function.arguments));
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          name: toolCall.function.name,
-          content: result
-        });
-      }
-
-      // GỌI GROQ LẦN 2
-      const secondResponse = await groq.chat.completions.create({
+      const streamResponse = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
-        messages: messages
+        messages: messages,
+        max_tokens: 150,
+        temperature: 0.7,
+        stream: true
       });
 
-      return res.json(cleanResponse(secondResponse));
-    }
+      let fullContent = '';
 
-    // TRẢ VỀ PHẢN HỒI TRỰC TIẾP
-    return res.json(cleanResponse(response));
+      for await (const chunk of streamResponse) {
+        const delta = chunk.choices[0]?.delta;
+        if (delta?.content) {
+          fullContent += delta.content;
+        }
+        // Gửi chunk theo format SSE mà Agora expect
+        const data = JSON.stringify(chunk);
+        res.write(`data: ${data}\n\n`);
+      }
+
+      console.log('[LLM Webhook] Stream xong, content:', fullContent);
+      res.write('data: [DONE]\n\n');
+      res.end();
+
+    } else {
+      // Non-streaming fallback
+      const response = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: messages,
+        max_tokens: 150,
+        temperature: 0.7,
+      });
+
+      const content = response.choices[0].message.content;
+      console.log('[LLM Webhook] Groq trả về:', content);
+      return res.json(cleanResponse(response));
+    }
 
   } catch (error) {
     console.error('[LLM Webhook Error]:', error.message);
-    res.status(500).json({ error: error.message });
+    // Fallback tránh Agora loop
+    if (!res.headersSent) {
+      return res.json({
+        id: 'fallback-' + Date.now(),
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: 'llama-3.3-70b-versatile',
+        choices: [{
+          message: { role: 'assistant', content: 'Dạ, anh chị cần em tư vấn sản phẩm gì ạ?' },
+          index: 0,
+          finish_reason: 'stop'
+        }],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+      });
+    }
   }
 };
 
