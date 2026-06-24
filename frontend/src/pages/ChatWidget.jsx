@@ -342,23 +342,37 @@ function ChatWidget() {
     const transcriptSessionId = payload.session_id || payload.sessionId;
     if (transcriptSessionId && sessionId && transcriptSessionId !== sessionId) return;
 
-    const content = payload.content || payload.transcript || payload.text || payload.message;
+    const content = payload.transcript || payload.content || payload.text || payload.message;
     if (!content) return;
 
     const sender = payload.sender || payload.role || 'user';
+    const messageId = payload.id || payload.messageId || generateId();
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: payload.id || generateId(),
-        role: sender === 'user' ? 'user' : 'assistant',
-        sender,
-        type: 'voice',
-        content,
-        audio_url: payload.audio_url || payload.audioUrl || null,
-        timestamp: payload.timestamp || new Date().toISOString()
+    setMessages((current) => {
+      const existingIndex = current.findIndex((m) => m.id === messageId);
+      if (existingIndex > -1) {
+        const updated = [...current];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          content,
+          timestamp: payload.timestamp || updated[existingIndex].timestamp
+        };
+        return updated;
+      } else {
+        return [
+          ...current,
+          {
+            id: messageId,
+            role: sender === 'user' ? 'user' : 'assistant',
+            sender,
+            type: 'voice',
+            content,
+            audio_url: payload.audio_url || payload.audioUrl || null,
+            timestamp: payload.timestamp || new Date().toISOString()
+          }
+        ];
       }
-    ]);
+    });
   }, [sessionId]);
 
   const handleOrderPaid = useCallback((payload = {}) => {

@@ -81,13 +81,13 @@ async function runMigration() {
         seller_wallet VARCHAR(255) NOT NULL,
         status VARCHAR(50) DEFAULT 'pending' NOT NULL,
         tx_signature VARCHAR(255),
-        payment_reminded_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '15 minutes'),
         customer_name VARCHAR(255),
         customer_phone VARCHAR(20),
         customer_address TEXT,
         items_list JSONB,
+        payment_reminded_at TIMESTAMP WITH TIME ZONE,
         CONSTRAINT chk_status CHECK (status IN ('pending', 'paid', 'expired', 'payment_mismatch'))
       );
 

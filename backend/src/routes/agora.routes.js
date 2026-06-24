@@ -123,7 +123,7 @@ Bản đồ sản phẩm & giá mặc định để tham khảo:
 const fallbackDetectVoiceOrder = (messages) => {
   const allContent = messages.map(m => m.content).join(' ').toLowerCase();
   const hasBuyIntent = allContent.includes('mua') || allContent.includes('đặt hàng') || allContent.includes('chốt') || allContent.includes('chot') || allContent.includes('order');
-  
+
   let customerName = null;
   let customerPhone = null;
   let customerAddress = null;
@@ -152,7 +152,7 @@ const fallbackDetectVoiceOrder = (messages) => {
 
   for (let i = 0; i < messages.length - 1; i++) {
     const current = messages[i];
-    const next = messages[i+1];
+    const next = messages[i + 1];
     if (current.role === 'assistant' && next.role === 'user') {
       const currentLower = current.content.toLowerCase();
       if (currentLower.includes('tên người nhận') || currentLower.includes('cho em biết tên') || currentLower.includes('xin tên') || currentLower.includes('họ và tên')) {
@@ -195,6 +195,23 @@ const llmWebhookHandler = async (req, res) => {
   try {
     const { messages: reqMessages, stream } = req.body;
     if (!reqMessages) return res.status(400).json({ error: 'No messages' });
+
+    const sessionId = req.query.sessionId || req.body.sessionId || req.body.channel;
+
+    // Emit user's transcript immediately to the chat screen
+    if (sessionId) {
+      const lastUserMsg = [...reqMessages].reverse().find(msg => msg.role === 'user');
+      if (lastUserMsg && lastUserMsg.content) {
+        const { emitTranscriptReceived } = require('../websocket/socket.server');
+        emitTranscriptReceived({
+          sessionId,
+          sender: 'user',
+          transcript: lastUserMsg.content,
+          type: 'voice',
+          id: 'user-' + Date.now()
+        });
+      }
+    }
 
     // Lọc metadata Agora thêm vào, Groq không chấp nhận
     let messages = reqMessages.map(msg => {
@@ -244,7 +261,7 @@ const llmWebhookHandler = async (req, res) => {
     // Kiểm tra xem khách đã đặt đơn chưa để tránh duplicate order
     const allContentLower = messages.map(m => m.content).join(' ').toLowerCase();
     const alreadyCreated = allContentLower.includes('da em da ghi nhan thong tin, anh chi vui long nhin vao cua so chat') ||
-                           allContentLower.includes('dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat');
+      allContentLower.includes('dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat');
 
     if (!alreadyCreated) {
       let detection = await detectVoiceOrder(messages);
@@ -316,6 +333,19 @@ const llmWebhookHandler = async (req, res) => {
 
         const speakText = 'Dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat để xem mã QR thanh toán nhé!';
 
+        // Emit AI assistant response for voice order created success
+        if (sessionId) {
+          const assistantMsgId = 'ai-order-' + Date.now();
+          const { emitTranscriptReceived } = require('../websocket/socket.server');
+          emitTranscriptReceived({
+            sessionId,
+            sender: 'assistant',
+            transcript: speakText,
+            type: 'voice',
+            id: assistantMsgId
+          });
+        }
+
         // Override response to stream/return the static speech
         if (stream) {
           res.setHeader('Content-Type', 'text/event-stream');
@@ -326,7 +356,7 @@ const llmWebhookHandler = async (req, res) => {
             id: 'voice-order-' + Date.now(),
             object: 'chat.completion.chunk',
             created: Math.floor(Date.now() / 1000),
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
             choices: [
               {
                 index: 0,
@@ -343,7 +373,7 @@ const llmWebhookHandler = async (req, res) => {
             id: 'voice-order-' + Date.now(),
             object: 'chat.completion.chunk',
             created: Math.floor(Date.now() / 1000),
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
             choices: [
               {
                 index: 0,
@@ -361,7 +391,7 @@ const llmWebhookHandler = async (req, res) => {
             id: 'voice-order-' + Date.now(),
             object: 'chat.completion',
             created: Math.floor(Date.now() / 1000),
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
             choices: [{
               message: {
                 role: 'assistant',
@@ -384,7 +414,7 @@ const llmWebhookHandler = async (req, res) => {
       res.setHeader('Connection', 'keep-alive');
 
       const streamResponse = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         messages: messages,
         max_tokens: 100,
         temperature: 0.6,
@@ -392,11 +422,22 @@ const llmWebhookHandler = async (req, res) => {
       });
 
       let fullContent = '';
+      const assistantMsgId = 'ai-' + Date.now();
 
       for await (const chunk of streamResponse) {
         const delta = chunk.choices[0]?.delta;
         if (delta?.content) {
           fullContent += delta.content;
+          if (sessionId) {
+            const { emitTranscriptReceived } = require('../websocket/socket.server');
+            emitTranscriptReceived({
+              sessionId,
+              sender: 'assistant',
+              transcript: fullContent,
+              type: 'voice',
+              id: assistantMsgId
+            });
+          }
         }
         const data = JSON.stringify(chunk);
         res.write(`data: ${data}\n\n`);
@@ -408,7 +449,7 @@ const llmWebhookHandler = async (req, res) => {
 
     } else {
       const response = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         messages: messages,
         max_tokens: 100,
         temperature: 0.6,
@@ -416,21 +457,49 @@ const llmWebhookHandler = async (req, res) => {
 
       const content = response.choices[0].message.content;
       console.log('[LLM Webhook] Groq trả về:', content);
+
+      if (sessionId) {
+        const assistantMsgId = 'ai-' + Date.now();
+        const { emitTranscriptReceived } = require('../websocket/socket.server');
+        emitTranscriptReceived({
+          sessionId,
+          sender: 'assistant',
+          transcript: content,
+          type: 'voice',
+          id: assistantMsgId
+        });
+      }
+
       return res.json(cleanResponse(response));
     }
 
   } catch (error) {
     console.error('[LLM Webhook Error]:', error.message);
     if (!res.headersSent) {
+      const fallbackContent = 'Dạ, anh chị đang quan tâm sản phẩm gì ạ?';
+
+      const currentSessionId = req.query.sessionId || req.body.sessionId || req.body.channel;
+      if (currentSessionId) {
+        const assistantMsgId = 'ai-fallback-' + Date.now();
+        const { emitTranscriptReceived } = require('../websocket/socket.server');
+        emitTranscriptReceived({
+          sessionId: currentSessionId,
+          sender: 'assistant',
+          transcript: fallbackContent,
+          type: 'voice',
+          id: assistantMsgId
+        });
+      }
+
       return res.json({
         id: 'fallback-' + Date.now(),
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         choices: [{
           message: {
             role: 'assistant',
-            content: 'Dạ, anh chị đang quan tâm sản phẩm gì ạ?'
+            content: fallbackContent
           },
           index: 0,
           finish_reason: 'stop'

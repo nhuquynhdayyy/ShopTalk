@@ -25,12 +25,13 @@ const emitOrderPaid = (order) => {
   return emitSocketEvent('order_paid', payload);
 };
 
-const emitTranscriptReceived = ({ sessionId, sender, transcript, type = 'voice', timestamp = new Date().toISOString() }) => (
+const emitTranscriptReceived = ({ sessionId, sender, transcript, type = 'voice', id, timestamp = new Date().toISOString() }) => (
   emitSocketEvent('transcript_received', {
     sessionId,
     sender,
     transcript,
     type,
+    id,
     timestamp,
   })
 );

@@ -3,28 +3,32 @@ import { motion } from 'framer-motion';
 
 const statusCopy = {
   CONNECTING: {
-    label: 'Dang ket noi',
-    description: 'Dang mo kenh voice voi ShopTalk AI.'
+    label: 'Đang kết nối',
+    description: 'Đang mở kênh voice với ShopTalk AI.'
   },
   CONNECTED: {
-    label: 'Dang lang nghe',
-    description: 'Transcript se duoc ghi vao luong chat.'
+    label: 'Đang lắng nghe',
+    description: 'Transcript sẽ được ghi vào luồng chat.'
   },
   DISCONNECTED: {
-    label: 'Chua ket noi',
-    description: 'Bat dau voice call khi khach muon tu van bang giong noi.'
+    label: 'Chưa kết nối',
+    description: 'Bắt đầu voice call khi khách muốn tư vấn bằng giọng nói.'
   },
   RECONNECTING: {
-    label: 'Dang ket noi lai',
-    description: 'Giu man hinh nay mo trong khi he thong khoi phuc kenh voice.'
+    label: 'Đang kết nối lại',
+    description: 'Giữ màn hình này mở trong khi hệ thống khôi phục kênh voice.'
+  },
+  FAILED: {
+    label: 'Lỗi kết nối',
+    description: 'Không thể mở kênh voice. Vui lòng làm mới trang hoặc thử lại.'
   },
   speaking: {
-    label: 'Dang noi',
-    description: 'Tin nhan voice dang duoc chuyen thanh transcript.'
+    label: 'Đang nói',
+    description: 'Tin nhắn voice đang được chuyển thành transcript.'
   },
   listening: {
-    label: 'Dang lang nghe',
-    description: 'ShopTalk san sang nhan giong noi tu khach.'
+    label: 'Đang lắng nghe',
+    description: 'ShopTalk sẵn sàng nhận giọng nói từ khách.'
   }
 };
 

@@ -627,7 +627,7 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
         },
         llm: {
           vendor: 'custom',
-          url: `${ngrokUrl}/api/agora/llm-webhook`,
+          url: `${ngrokUrl}/api/agora/llm-webhook?sessionId=${encodeURIComponent(sessionId || channelName)}`,
           params: { model: 'llama-3.1-8b-instant' },
           failure_message: 'Dạ, em xin lỗi, đường truyền đang gặp chút vấn đề. Anh chị vui lòng đợi em một xíu ạ.',
           greeting_message: 'Dạ, ShopTalk xin chào anh/chị! Em là nhân viên tư vấn ảo của cửa hàng. Anh chị đang quan tâm đến mẫu điện thoại Solana Saga hay phụ kiện nào bên em ạ?',
