@@ -56,13 +56,18 @@ const normalizeOrderInput = (orderOrReference, expectedAmount, expectedRecipient
   };
 };
 
-const hasReferenceInTransaction = (transaction, reference) => {
-  const accountKeys = transaction?.transaction?.message?.accountKeys || [];
+const hasReferenceInTransaction = (tx, reference) => {
+  const keys =
+    tx?.transaction?.message?.instructions?.flatMap(ix => ix.accounts || ix.keys || []) || [];
 
-  return accountKeys.some((account) => {
-    if (typeof account === 'string') return account === reference;
-    return account.pubkey === reference;
-  });
+  if (keys.some(k => (typeof k === 'string' ? k : k.pubkey) === reference)) {
+    return true;
+  }
+
+  const accountKeys = tx?.transaction?.message?.accountKeys || [];
+  return accountKeys.some(k =>
+    (typeof k === 'string' ? k : k.pubkey) === reference
+  );
 };
 
 const calculateReceivedRawAmount = (transaction, expectedRecipient) => {
