@@ -86,11 +86,11 @@ const getOrCreateSession = (sessionId) => {
 };
 
 // ─── Định nghĩa Danh sách Tools (Function Calling) cho OpenAI ──────────────
-const checkInventoryTool = require('../../../ai-agent/tools/checkInventory.tool');
-const createOrderTool = require('../../../ai-agent/tools/createOrder.tool');
-const generatePaymentQRTool = require('../../../ai-agent/tools/generatePaymentQR.tool');
-const getReviewsTool = require('../../../ai-agent/tools/getReviews.tool');
-const logFeedbackTool = require('../../../ai-agent/tools/logFeedback.tool');
+const checkInventoryTool = require('../../ai-agent/tools/checkInventory.tool');
+const createOrderTool = require('../../ai-agent/tools/createOrder.tool');
+const generatePaymentQRTool = require('../../ai-agent/tools/generatePaymentQR.tool');
+const getReviewsTool = require('../../ai-agent/tools/getReviews.tool');
+const logFeedbackTool = require('../../ai-agent/tools/logFeedback.tool');
 
 const OPENAI_TOOLS = [
   checkInventoryTool,
@@ -923,16 +923,16 @@ const triggerAgentSpeak = async (sessionId, text) => {
     const appId = process.env.AGORA_APP_ID;
     const customerId = process.env.AGORA_CUSTOMER_ID;
     const customerSecret = process.env.AGORA_CUSTOMER_SECRET;
-    
+
     if (!appId || !customerId || !customerSecret) {
       console.warn('[Agora] Thiếu cấu hình credentials, không thể gọi speak API.');
       return false;
     }
 
     const credentials = Buffer.from(`${customerId}:${customerSecret}`).toString('base64');
-    
+
     console.log(`[Agora Speak] Gửi yêu cầu speak đến Agent ${agentId} cho session ${sessionId}: "${text}"`);
-    
+
     const response = await fetch(
       `https://api.agora.io/api/conversational-ai-agent/v2/projects/${appId}/agents/${agentId}/speak`,
       {
