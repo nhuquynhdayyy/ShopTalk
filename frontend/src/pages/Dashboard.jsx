@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import api from '../api';
 import ConnectionIndicator from '../components/ConnectionIndicator';
 import OffRampModal from '../components/OffRampModal';
@@ -103,6 +104,7 @@ const formatTimestamp = (timestamp) => {
 };
 
 function Dashboard() {
+  const { t } = useTranslation();
   const [orders, setOrders] = useState(sortOrders(mockOrders));
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isOffRampOpen, setIsOffRampOpen] = useState(false);
@@ -178,12 +180,12 @@ function Dashboard() {
       playChime();
       setPaidAlert({
         id: updatedOrder.id,
-        product_name: updatedOrder.product_name || previousOrder?.product_name || 'Đơn hàng',
+        product_name: updatedOrder.product_name || previousOrder?.product_name || t('dashboard.alert.default_product', 'Đơn hàng'),
         amount: updatedOrder.amount || previousOrder?.amount || 0
       });
       window.setTimeout(() => setPaidAlert(null), 7000);
     }
-  }, [playChime]);
+  }, [playChime, t]);
 
   const handleOrderPaid = useCallback((payload) => {
     const paidOrder = normalizePaidOrder(payload);
@@ -194,7 +196,7 @@ function Dashboard() {
     const escalation = {
       id: payload.sessionId || `escalation-${Date.now()}`,
       sessionId: payload.sessionId,
-      message: payload.message || 'Khách hàng cần nhân viên hỗ trợ.',
+      message: payload.message || t('dashboard.escalation.default_msg', 'Khách hàng cần nhân viên hỗ trợ.'),
       timestamp: payload.timestamp || new Date().toISOString(),
       accepted: false
     };
@@ -203,7 +205,7 @@ function Dashboard() {
       escalation,
       ...current.filter((item) => item.id !== escalation.id)
     ]);
-  }, []);
+  }, [t]);
 
   const socketState = useWebSocket({
     order_status_updated: handleOrderStatusUpdated,
@@ -248,10 +250,10 @@ function Dashboard() {
       <section className="mx-auto w-full max-w-7xl space-y-6">
         <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold text-teal-700">Merchant Dashboard</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Đơn hàng ShopTalk</h1>
+            <p className="text-sm font-semibold text-teal-700">{t('dashboard.header.merchant', 'Merchant Dashboard')}</p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{t('dashboard.header.title', 'Đơn hàng ShopTalk')}</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-500">
-              Theo dõi thanh toán USDC, xử lý cảnh báo và rút tiền về ngân hàng trong cùng một màn hình.
+              {t('dashboard.header.subtitle', 'Theo dõi thanh toán USDC, xử lý cảnh báo và rút tiền về ngân hàng trong cùng một màn hình.')}
             </p>
           </div>
 
@@ -259,7 +261,7 @@ function Dashboard() {
             <ConnectionIndicator {...socketState} />
             {dataMode === 'mock' && (
               <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
-                Mock data
+                {t('dashboard.header.mock_data', 'Mock data')}
               </span>
             )}
             <button
@@ -268,7 +270,7 @@ function Dashboard() {
               disabled={isFetching}
               className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-wait disabled:text-slate-400"
             >
-              {isFetching ? 'Đang tải...' : 'Làm mới'}
+              {isFetching ? t('dashboard.header.fetching', 'Đang tải...') : t('dashboard.header.refresh', 'Làm mới')}
             </button>
           </div>
         </header>
@@ -283,7 +285,7 @@ function Dashboard() {
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p>
-                  Đơn <span className="font-semibold">{paidAlert.product_name}</span> đã thanh toán thành công:{' '}
+                  {t('dashboard.alert.paid_prefix', 'Đơn')} <span className="font-semibold">{paidAlert.product_name}</span> {t('dashboard.alert.paid_suffix', 'đã thanh toán thành công:')}{' '}
                   <span className="font-semibold">+{Number(paidAlert.amount || 0).toFixed(2)} USDC</span>.
                 </p>
                 <button
@@ -291,7 +293,7 @@ function Dashboard() {
                   onClick={() => setPaidAlert(null)}
                   className="self-start rounded-lg px-2 py-1 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 sm:self-auto"
                 >
-                  Đóng
+                  {t('dashboard.alert.close', 'Đóng')}
                 </button>
               </div>
             </motion.div>
@@ -310,11 +312,11 @@ function Dashboard() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-amber-950">
-                    Khách hàng cần nhân viên hỗ trợ
+                    {t('dashboard.escalation.title', 'Khách hàng cần nhân viên hỗ trợ')}
                   </p>
                   <p className="mt-1 text-sm text-amber-900">{item.message}</p>
                   <p className="mt-1 text-xs text-amber-700">
-                    Session {item.sessionId || 'không rõ'} · {formatTimestamp(item.timestamp)}
+                    {t('dashboard.escalation.session', 'Session')} {item.sessionId || t('dashboard.escalation.unknown', 'không rõ')} · {formatTimestamp(item.timestamp)}
                   </p>
                 </div>
                 <button
@@ -323,7 +325,7 @@ function Dashboard() {
                   disabled={item.accepted}
                   className="h-10 rounded-lg bg-amber-900 px-4 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:bg-amber-200 disabled:text-amber-800"
                 >
-                  {item.accepted ? 'Đã nhận' : 'Nhận'}
+                  {item.accepted ? t('dashboard.escalation.accepted', 'Đã nhận') : t('dashboard.escalation.accept', 'Nhận')}
                 </button>
               </div>
             </motion.div>
@@ -332,19 +334,19 @@ function Dashboard() {
 
         <div className="grid gap-4 md:grid-cols-4">
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">USDC đã nhận</p>
+            <p className="text-sm font-medium text-slate-500">{t('dashboard.stats.usdc', 'USDC đã nhận')}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-950">{totals.paidAmount.toFixed(2)}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Đơn đã thanh toán</p>
+            <p className="text-sm font-medium text-slate-500">{t('dashboard.stats.paid', 'Đơn đã thanh toán')}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-950">{totals.paidCount}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Đang chờ</p>
+            <p className="text-sm font-medium text-slate-500">{t('dashboard.stats.pending', 'Đang chờ')}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-950">{totals.pendingCount}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Cần chú ý</p>
+            <p className="text-sm font-medium text-slate-500">{t('dashboard.stats.attention', 'Cần chú ý')}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-950">{totals.attentionCount}</p>
           </div>
         </div>
@@ -352,19 +354,19 @@ function Dashboard() {
         <section>
           <div className="mb-3 flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-950">Danh sách đơn hàng</h2>
-              <p className="text-sm text-slate-500">Đơn vừa thanh toán sẽ tự nhảy lên đầu danh sách.</p>
+              <h2 className="text-lg font-semibold text-slate-950">{t('dashboard.list.title', 'Danh sách đơn hàng')}</h2>
+              <p className="text-sm text-slate-500">{t('dashboard.list.subtitle', 'Đơn vừa thanh toán sẽ tự nhảy lên đầu danh sách.')}</p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-              {orders.length} đơn
+              {orders.length} {t('dashboard.list.count_unit', 'đơn')}
             </span>
           </div>
 
           {orders.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
-              <h3 className="text-base font-semibold text-slate-950">Chưa có đơn hàng</h3>
+              <h3 className="text-base font-semibold text-slate-950">{t('dashboard.empty.title', 'Chưa có đơn hàng')}</h3>
               <p className="mt-2 text-sm text-slate-500">
-                Khi khách chốt đơn từ Chat Widget, đơn sẽ xuất hiện tại đây.
+                {t('dashboard.empty.subtitle', 'Khi khách chốt đơn từ Chat Widget, đơn sẽ xuất hiện tại đây.')}
               </p>
             </div>
           ) : (

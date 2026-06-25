@@ -1,14 +1,45 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Navigate, NavLink, Route, Routes } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import ChatWidget from './pages/ChatWidget.jsx';
 import Dashboard from './pages/Dashboard.jsx';
-
-const navItems = [
-  { to: '/chat', label: 'Chat Widget' },
-  { to: '/dashboard', label: 'Dashboard' }
-];
+import "flag-icons/css/flag-icons.min.css";
 
 function App() {
+  const { t, i18n } = useTranslation();
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const navItems = [
+    { to: '/chat', label: t('app.nav_chat') },
+    { to: '/dashboard', label: t('app.nav_dashboard') }
+  ];
+
+  const currentLang = i18n.language?.startsWith('vi') ? 'vi' : 'en';
+
+  const languages = [
+    { code: 'vi', label: 'Tiếng Việt', flag: 'fi fi-vn' },
+    { code: 'en', label: 'English', flag: 'fi fi-gb' }
+  ];
+
+  const activeLang = languages.find(l => l.code === currentLang) || languages[0];
+
+  const handleLanguageChange = (lng) => {
+    i18n.changeLanguage(lng);
+    sessionStorage.setItem('shoptalk_language', lng);
+    setIsLangMenuOpen(false); 
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsLangMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <Router>
       <div className="min-h-screen bg-slate-100 text-slate-950">
@@ -19,28 +50,63 @@ function App() {
                 ST
               </div>
               <div>
-                <p className="text-base font-semibold leading-none text-slate-950">ShopTalk</p>
-                <p className="mt-1 text-xs font-medium text-slate-500">AI Sales Agent + Solana Pay</p>
+                <p className="text-base font-semibold leading-none text-slate-950">{t('app.title')}</p>
+                <p className="mt-1 text-xs font-medium text-slate-500">{t('app.subtitle')}</p>
               </div>
             </div>
 
-            <nav className="flex w-full gap-2 rounded-lg bg-slate-100 p-1 lg:w-auto">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) => (
-                    `flex-1 rounded-md px-4 py-2 text-center text-sm font-semibold transition lg:flex-none ${
-                      isActive
-                        ? 'bg-white text-teal-700 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-950'
-                    }`
-                  )}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+              <nav className="flex w-full gap-2 rounded-lg bg-slate-100 p-1 lg:w-auto">
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) => (
+                      `flex-1 rounded-md px-4 py-2 text-center text-sm font-semibold transition lg:flex-none ${
+                        isActive
+                          ? 'bg-white text-teal-700 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-950'
+                      }`
+                    )}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+
+              {/* Custom Language Dropdown (Thay thế thẻ <select>) */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+                  className="flex items-center gap-2 min-w-[130px] rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
+                  <span className={`${activeLang.flag} text-lg rounded-sm`}></span>
+                  <span className="flex-1 text-left">{activeLang.label}</span>
+                  {/* Mũi tên dropdown */}
+                  <svg className={`h-4 w-4 text-slate-400 transition-transform ${isLangMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {isLangMenuOpen && (
+                  <div className="absolute right-0 mt-1 w-full overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                    {languages.map((lang) => (
+                      <button
+                        key={lang.code}
+                        onClick={() => handleLanguageChange(lang.code)}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-slate-50 ${
+                          currentLang === lang.code ? 'bg-slate-50 text-teal-700 font-semibold' : 'text-slate-700'
+                        }`}
+                      >
+                        <span className={`${lang.flag} text-lg rounded-sm`}></span>
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+            </div>
           </div>
         </header>
 

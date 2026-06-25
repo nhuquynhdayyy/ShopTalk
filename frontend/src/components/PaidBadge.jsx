@@ -1,7 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 
 function PaidBadge({ order }) {
+  const { t } = useTranslation();
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -20,9 +23,9 @@ function PaidBadge({ order }) {
           OK
         </motion.div>
         <div>
-          <p className="text-sm font-semibold text-emerald-950">Da thanh toan</p>
+          <p className="text-sm font-semibold text-emerald-950">{t('components.paid_badge.title', 'Da thanh toan')}</p>
           <p className="mt-1 text-sm text-emerald-800">
-            {order?.product_name || 'Don hang ShopTalk'} da nhan thanh toan
+            {order?.product_name || t('components.paid_badge.default_product', 'Don hang ShopTalk')} {t('components.paid_badge.received', 'da nhan thanh toan')}
             {order?.amount ? ` ${Number(order.amount).toFixed(2)} USDC` : ''}.
           </p>
         </div>

@@ -1,0 +1,199 @@
+{
+  "app": {
+    "title": "ShopTalk",
+    "subtitle": "AI Sales Agent + Solana Pay",
+    "nav_chat": "Chat Widget",
+    "nav_dashboard": "Dashboard"
+  },
+  "chat": {
+    "mock": {
+      "staff_handoff": "I have transferred this conversation to our staff. Please keep this screen open, an agent will assist you shortly.",
+      "order_created": "I have created the order for {{product}}. The total is {{amount}} USDC. Please scan the QR code to pay via your Solana wallet.",
+      "suggestion": "I suggest starting with the ShopTalk Essential t-shirt if you want an easy sell, or the Bluetooth headset if your customer likes tech accessories. Which product should I create an order for?"
+    },
+    "qr": {
+      "default_product": "Product",
+      "order_created_title": "Order Initialized",
+      "product_label": "Product:",
+      "amount_label": "Amount:",
+      "order_id_label": "Order ID:",
+      "scan_hint": "Scan with Phantom/Solflare (Devnet)",
+      "zoom_btn": "Enlarge QR",
+      "copied_alert": "Recipient wallet address copied!",
+      "copy_wallet_btn": "Copy Seller Wallet",
+      "checking_inventory": "Checking inventory:"
+    },
+    "staff": {
+      "avatar": "CS",
+      "title": "Staff is assisting",
+      "message": "Hello, I have received your request. Please wait a moment while I review the conversation."
+    },
+    "system": {
+      "paid_success": "{{product}} has been successfully paid{{amountText}}."
+    },
+    "header": {
+      "title": "ShopTalk Chat",
+      "subtitle_escalated": "Transferred to staff",
+      "subtitle_ready": "AI Sales Agent is ready",
+      "mock_data": "Mock data",
+      "refresh": "Refresh"
+    },
+    "input": {
+      "waiting_payment": "AI is waiting for you to pay for \"{{product}}\"...",
+      "close_qr": "Close QR",
+      "placeholder": "Enter your question or purchase request...",
+      "unmute": "Unmute",
+      "mute": "Mute",
+      "call_ai": "Voice Call AI",
+      "send": "Send"
+    },
+    "prompts": {
+      "Tư vấn áo thun bán chạy": "Recommend best-selling t-shirts",
+      "Mình muốn mua tai nghe": "I want to buy a headset",
+      "Cho mình gặp chủ shop": "Let me talk to the shop owner"
+    }
+  },
+  "dashboard": {
+    "alert": {
+      "default_product": "Order",
+      "paid_prefix": "Order",
+      "paid_suffix": "was paid successfully:",
+      "close": "Close"
+    },
+    "escalation": {
+      "default_msg": "Customer needs staff assistance.",
+      "title": "Customer needs staff assistance",
+      "session": "Session",
+      "unknown": "unknown",
+      "accepted": "Accepted",
+      "accept": "Accept"
+    },
+    "header": {
+      "merchant": "Merchant Dashboard",
+      "title": "ShopTalk Orders",
+      "subtitle": "Track USDC payments, handle alerts, and withdraw to bank in a single dashboard.",
+      "mock_data": "Mock data",
+      "fetching": "Loading...",
+      "refresh": "Refresh"
+    },
+    "stats": {
+      "usdc": "USDC Received",
+      "paid": "Paid Orders",
+      "pending": "Pending",
+      "attention": "Needs Attention"
+    },
+    "list": {
+      "title": "Order List",
+      "subtitle": "Newly paid orders will automatically jump to the top.",
+      "count_unit": "orders"
+    },
+    "empty": {
+      "title": "No orders yet",
+      "subtitle": "When a customer completes an order from the Chat Widget, it will appear here."
+    }
+  },
+  "components": {
+    "connection": {
+      "online": "Online",
+      "reconnecting": "Reconnecting",
+      "offline": "Offline",
+      "tooltip": "Real-time connection status"
+    },
+    "offramp": {
+      "banks": {
+        "vpbank": "VPBank (CAEX Pilot)",
+        "techcombank": "Techcombank (TCEX Pilot)",
+        "vietcombank": "Vietcombank",
+        "mb": "MB Bank",
+        "acb": "ACB"
+      },
+      "close_aria": "Close withdrawal modal",
+      "tag": "Off-ramp",
+      "title": "Withdraw USDC to Bank",
+      "balance": "Available Balance",
+      "exchange_rate": "Assumed Exchange Rate",
+      "receive": "You Receive",
+      "bank_name": "Bank Name",
+      "account_number": "Account Number",
+      "account_placeholder": "Enter account number",
+      "submit": "Confirm Withdrawal",
+      "processing_title": "Processing Withdrawal",
+      "processing_desc": "ShopTalk is sending the request to the off-ramp partner.",
+      "success_title": "Withdrawal Successful",
+      "success_desc": "{{amount}} USDC has been converted to {{vnd}} VND and sent to account {{account}} at {{bank}}.",
+      "close_btn": "Close"
+    },
+    "order": {
+      "unknown_time": "Unknown time",
+      "withdrawn": "VND Withdrawn",
+      "default_product": "ShopTalk Order",
+      "order_id": "Order ID:",
+      "wallet": "Receiving Wallet:",
+      "customer": "Customer:",
+      "phone": "Phone:",
+      "address": "Delivery Address:",
+      "amount": "Amount",
+      "withdraw_btn": "Withdraw VND"
+    },
+    "paid_badge": {
+      "title": "Paid",
+      "default_product": "ShopTalk Order",
+      "received": "payment received"
+    },
+    "qr_display": {
+      "title": "Solana Pay Checkout",
+      "product": "Product:",
+      "amount": "Amount:",
+      "alt": "Solana Pay QR Code",
+      "instruction": "Open Phantom/Solflare wallet (<b>Devnet</b>) and scan this QR code to confirm."
+    },
+    "qr_modal": {
+      "no_wallet": "No wallet data",
+      "close_aria": "Close QR modal",
+      "title": "Scan to Pay",
+      "close_btn": "Close",
+      "alt": "Solana Pay QR Code",
+      "product": "Product",
+      "default_product": "ShopTalk Order",
+      "amount": "Amount",
+      "order_id": "Order ID",
+      "customer": "Customer",
+      "phone": "Phone",
+      "address": "Address",
+      "wallet": "Seller Wallet Address",
+      "copied": "Copied",
+      "copy_btn": "Copy Address"
+    },
+    "status": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "expired": "Expired",
+      "mismatch": "Check Required",
+      "unknown": "Unknown"
+    },
+    "voice": {
+      "status": {
+        "connecting_lbl": "Connecting",
+        "connecting_desc": "Opening voice channel with ShopTalk AI.",
+        "connected_lbl": "Listening",
+        "connected_desc": "Transcript will be recorded in the chat stream.",
+        "reconnecting_lbl": "Reconnecting",
+        "reconnecting_desc": "Keep this screen open while the system restores the voice channel.",
+        "failed_lbl": "Connection Error",
+        "failed_desc": "Failed to open voice channel. Please refresh or try again.",
+        "speaking_lbl": "Speaking",
+        "speaking_desc": "Voice message is being transcribed.",
+        "listening_lbl": "Listening",
+        "listening_desc": "ShopTalk is ready to receive customer voice.",
+        "disconnected_lbl": "Disconnected",
+        "disconnected_desc": "Start a voice call when the customer requests voice assistance."
+      },
+      "muted": "Muted",
+      "session": "Voice session",
+      "unmute": "Unmute",
+      "mute": "Mute",
+      "end_call": "End Call",
+      "call_btn": "Voice Call"
+    }
+  }
+}

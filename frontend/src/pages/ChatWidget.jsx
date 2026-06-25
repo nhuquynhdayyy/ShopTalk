@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import api from '../api';
 import PaidBadge from '../components/PaidBadge';
 import QRModal from '../components/QRModal';
@@ -50,7 +51,7 @@ const createMockQrImage = () => {
   return `data:image/svg+xml;base64,${window.btoa(svg)}`;
 };
 
-const buildMockChatResponse = (message, sessionId) => {
+const buildMockChatResponse = (message, sessionId, t) => {
   const normalized = message.toLowerCase();
   const wantsHuman = ['gặp', 'nhân viên', 'người thật', 'chủ shop', 'khiếu nại', 'support'].some((keyword) => (
     normalized.includes(keyword)
@@ -63,7 +64,7 @@ const buildMockChatResponse = (message, sessionId) => {
     return {
       success: true,
       sessionId,
-      reply: 'Mình đã chuyển cuộc trò chuyện này cho nhân viên. Bạn giữ màn hình này mở, nhân viên sẽ tiếp nhận ngay.',
+      reply: t('chat.mock.staff_handoff', 'Mình đã chuyển cuộc trò chuyện này cho nhân viên. Bạn giữ màn hình này mở, nhân viên sẽ tiếp nhận ngay.'),
       escalate: true,
       qrCodeImage: null,
       orderId: null
@@ -88,7 +89,7 @@ const buildMockChatResponse = (message, sessionId) => {
     return {
       success: true,
       sessionId,
-      reply: `Mình đã tạo đơn ${order.product_name}. Tổng thanh toán là ${order.amount} USDC. Bạn quét mã QR vừa mở để thanh toán qua ví Solana nhé.`,
+      reply: t('chat.mock.order_created', 'Mình đã tạo đơn {{product}}. Tổng thanh toán là {{amount}} USDC. Bạn quét mã QR vừa mở để thanh toán qua ví Solana nhé.', { product: order.product_name, amount: order.amount }),
       escalate: false,
       qrCodeImage: createMockQrImage(),
       orderId
@@ -98,7 +99,7 @@ const buildMockChatResponse = (message, sessionId) => {
   return {
     success: true,
     sessionId,
-    reply: 'Mình gợi ý bắt đầu với áo thun ShopTalk Essential nếu bạn cần món dễ bán, hoặc tai nghe Bluetooth nếu khách của bạn thích phụ kiện công nghệ. Bạn muốn mình tạo đơn cho sản phẩm nào?',
+    reply: t('chat.mock.suggestion', 'Mình gợi ý bắt đầu với áo thun ShopTalk Essential nếu bạn cần món dễ bán, hoặc tai nghe Bluetooth nếu khách của bạn thích phụ kiện công nghệ. Bạn muốn mình tạo đơn cho sản phẩm nào?'),
     escalate: false,
     qrCodeImage: null,
     orderId: null
@@ -117,10 +118,9 @@ function TypingIndicator() {
   );
 }
 
-const parseMessageContent = (content, onShowQr) => {
+const parseMessageContent = (content, onShowQr, t) => {
   if (!content) return null;
 
-  // Regex to match <function=name>JSON_ARGS</function>
   const regex = /<function=([^>]+)>([\s\S]*?)<\/function>/g;
   const elements = [];
   let lastIndex = 0;
@@ -148,7 +148,7 @@ const parseMessageContent = (content, onShowQr) => {
     if (funcName === 'create_order' || funcName === 'generate_payment_qr') {
       const orderId = args.order_id || args.id;
       const orderAmount = args.amount || args.price_usdc;
-      const productName = args.product_name || args.name || 'Sản phẩm';
+      const productName = args.product_name || args.name || t('chat.qr.default_product', 'Sản phẩm');
       const qrCodeImage = args.qr_code || args.qrCodeImage;
       const sellerWallet = args.seller_wallet;
 
@@ -156,21 +156,21 @@ const parseMessageContent = (content, onShowQr) => {
         <div key={`func-${match.index}`} className="my-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-800 shadow-inner">
           <div className="flex items-center gap-2">
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-100 text-teal-800 text-[10px] font-bold">✓</span>
-            <h4 className="text-xs font-semibold text-slate-900">Đơn hàng được khởi tạo</h4>
+            <h4 className="text-xs font-semibold text-slate-900">{t('chat.qr.order_created_title', 'Đơn hàng được khởi tạo')}</h4>
           </div>
 
           <div className="mt-2.5 space-y-1 text-xs text-slate-600">
             <div className="flex justify-between">
-              <span>Sản phẩm:</span>
+              <span>{t('chat.qr.product_label', 'Sản phẩm:')}</span>
               <span className="font-semibold text-slate-800">{productName}</span>
             </div>
             <div className="flex justify-between">
-              <span>Số tiền:</span>
+              <span>{t('chat.qr.amount_label', 'Số tiền:')}</span>
               <span className="font-semibold text-teal-700">{orderAmount} USDC (Devnet)</span>
             </div>
             {orderId && (
               <div className="flex justify-between">
-                <span>Mã đơn:</span>
+                <span>{t('chat.qr.order_id_label', 'Mã đơn:')}</span>
                 <span className="font-mono text-[10px] text-slate-500">{orderId.slice(0, 8)}...</span>
               </div>
             )}
@@ -179,7 +179,7 @@ const parseMessageContent = (content, onShowQr) => {
           {qrCodeImage && (
             <div className="mt-3 flex flex-col items-center justify-center rounded bg-white p-2 border border-slate-200">
               <img src={qrCodeImage} alt="QR Code Solana Pay" className="h-40 w-40 object-contain" />
-              <p className="mt-1 text-[9px] text-slate-400">Quét bằng ví Phantom/Solflare (Devnet)</p>
+              <p className="mt-1 text-[9px] text-slate-400">{t('chat.qr.scan_hint', 'Quét bằng ví Phantom/Solflare (Devnet)')}</p>
             </div>
           )}
 
@@ -198,7 +198,7 @@ const parseMessageContent = (content, onShowQr) => {
                 })}
                 className="h-8 rounded bg-teal-600 px-3 text-xs font-semibold text-white transition hover:bg-teal-700"
               >
-                Phóng to QR
+                {t('chat.qr.zoom_btn', 'Phóng to QR')}
               </button>
             )}
             {sellerWallet && (
@@ -206,11 +206,11 @@ const parseMessageContent = (content, onShowQr) => {
                 type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(sellerWallet);
-                  alert('Đã copy địa chỉ ví người nhận!');
+                  alert(t('chat.qr.copied_alert', 'Đã copy địa chỉ ví người nhận!'));
                 }}
                 className="h-8 rounded border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Copy ví người bán
+                {t('chat.qr.copy_wallet_btn', 'Copy ví người bán')}
               </button>
             )}
           </div>
@@ -221,7 +221,7 @@ const parseMessageContent = (content, onShowQr) => {
       elements.push(
         <div key={`func-${match.index}`} className="my-2 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
           <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />
-          <span>Đang kiểm tra kho: <strong className="text-slate-800">{productName}</strong></span>
+          <span>{t('chat.qr.checking_inventory', 'Đang kiểm tra kho:')} <strong className="text-slate-800">{productName}</strong></span>
         </div>
       );
     }
@@ -241,7 +241,7 @@ const parseMessageContent = (content, onShowQr) => {
   return <div className="space-y-1">{elements}</div>;
 };
 
-function ChatBubble({ message, onShowQr }) {
+function ChatBubble({ message, onShowQr, t }) {
   const isUser = message.role === 'user';
 
   if (message.type === 'voice') {
@@ -262,13 +262,13 @@ function ChatBubble({ message, onShowQr }) {
             : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
           }`}
       >
-        {isUser ? message.content : parseMessageContent(message.content, onShowQr)}
+        {isUser ? message.content : parseMessageContent(message.content, onShowQr, t)}
       </div>
     </motion.div>
   );
 }
 
-function StaffHandoff() {
+function StaffHandoff({ t }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -277,12 +277,12 @@ function StaffHandoff() {
     >
       <div className="flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
-          NV
+          {t('chat.staff.avatar', 'NV')}
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-slate-950">Nhân viên đang hỗ trợ</h3>
+          <h3 className="text-sm font-semibold text-slate-950">{t('chat.staff.title', 'Nhân viên đang hỗ trợ')}</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Chào bạn, mình đã nhận được yêu cầu. Bạn chờ trong giây lát để shop tiếp tục cuộc trò chuyện nhé.
+            {t('chat.staff.message', 'Chào bạn, mình đã nhận được yêu cầu. Bạn chờ trong giây lát để shop tiếp tục cuộc trò chuyện nhé.')}
           </p>
         </div>
       </div>
@@ -291,20 +291,20 @@ function StaffHandoff() {
 }
 
 function ChatWidget() {
+  const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState(mockMessages);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [isEscalated, setIsEscalated] = useState(false);
 
-  const [language, setLanguage] = useState('vi');
+  const [language, setLanguage] = useState(i18n.language?.startsWith('vi') ? 'vi' : 'en');
 
   const [isMockMode, setIsMockMode] = useState(false);
   const [qrPayload, setQrPayload] = useState(null);
   const [paidReceipt, setPaidReceipt] = useState(null);
   const chatEndRef = useRef(null);
 
-  // ── Voice call via Agora ──────────────────────────────────────────────────
   const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute } = useAgoraVoice(sessionId);
 
   const handleVoiceOrderCreated = useCallback((data) => {
@@ -388,10 +388,13 @@ function ChatWidget() {
       {
         id: `paid-${paidOrder.id || Date.now()}`,
         role: 'assistant',
-        content: `${paidOrder.product_name || 'Don hang ShopTalk'} da thanh toan thanh cong${paidOrder.amount ? ` ${Number(paidOrder.amount).toFixed(2)} USDC` : ''}.`
+        content: t('chat.system.paid_success', '{{product}} đã thanh toán thành công{{amountText}}.', {
+          product: paidOrder.product_name || 'Đơn hàng ShopTalk',
+          amountText: paidOrder.amount ? ` ${Number(paidOrder.amount).toFixed(2)} USDC` : ''
+        })
       }
     ]);
-  }, [normalizePaidOrder, qrPayload]);
+  }, [normalizePaidOrder, qrPayload, t]);
 
   useWebSocket({
     voice_order_created: handleVoiceOrderCreated,
@@ -415,8 +418,8 @@ function ChatWidget() {
   }, [messages, isTyping, isEscalated, paidReceipt]);
 
   const subtitle = useMemo(() => (
-    isEscalated ? 'Đã chuyển sang nhân viên' : 'AI Sales Agent đang sẵn sàng'
-  ), [isEscalated]);
+    isEscalated ? t('chat.header.subtitle_escalated', 'Đã chuyển sang nhân viên') : t('chat.header.subtitle_ready', 'AI Sales Agent đang sẵn sàng')
+  ), [isEscalated, t]);
 
   const resolveOrderSummary = async (orderId) => {
     if (mockOrderDetailsById.has(orderId)) {
@@ -431,7 +434,7 @@ function ChatWidget() {
     } catch (_) {
       return {
         id: orderId,
-        product_name: 'Đơn hàng ShopTalk',
+        product_name: t('chat.qr.default_product', 'Đơn hàng ShopTalk'),
         amount: 0,
         seller_wallet: ''
       };
@@ -460,7 +463,7 @@ function ChatWidget() {
         }
         setIsMockMode(false);
       } catch (_) {
-        response = buildMockChatResponse(text, sessionId || generateId());
+        response = buildMockChatResponse(text, sessionId || generateId(), t);
         setIsMockMode(true);
       }
 
@@ -521,7 +524,7 @@ function ChatWidget() {
                 ST
               </div>
               <div>
-                <h1 className="text-base font-semibold text-slate-950">ShopTalk Chat</h1>
+                <h1 className="text-base font-semibold text-slate-950">{t('chat.header.title', 'ShopTalk Chat')}</h1>
                 <p className="text-sm text-slate-500">{subtitle}</p>
               </div>
             </div>
@@ -529,24 +532,15 @@ function ChatWidget() {
             <div className="flex items-center gap-2">
               {isMockMode && (
                 <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
-                  Mock data
+                  {t('chat.header.mock_data', 'Mock data')}
                 </span>
               )}
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                disabled={isInCall || connectionState === 'CONNECTING'}
-                className="bg-white text-xs text-slate-700 border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-teal-500"
-              >
-                <option value="vi">🇻🇳 Tiếng Việt</option>
-                <option value="en">🇺🇸 English</option>
-              </select>
               <button
                 type="button"
                 onClick={handleReset}
                 className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Làm mới
+                {t('chat.header.refresh', 'Làm mới')}
               </button>
             </div>
           </div>
@@ -573,6 +567,7 @@ function ChatWidget() {
               <ChatBubble
                 key={message.id}
                 message={message}
+                t={t}
                 onShowQr={(qrCodeImage, order) => setQrPayload({ qrCodeImage, order })}
               />
             ))}
@@ -580,7 +575,7 @@ function ChatWidget() {
           </AnimatePresence>
 
           {isTyping && <TypingIndicator />}
-          {isEscalated && <StaffHandoff />}
+          {isEscalated && <StaffHandoff t={t} />}
           <div ref={chatEndRef} />
         </div>
 
@@ -590,14 +585,14 @@ function ChatWidget() {
               <div className="mb-3 flex items-center justify-between rounded-lg bg-teal-50 border border-teal-100 px-4 py-2.5 text-teal-800 text-xs font-medium animate-pulse">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-teal-500 animate-ping" />
-                  <span>AI đang đợi bạn thanh toán đơn hàng "{qrPayload.order?.product_name || 'Sản phẩm'}"...</span>
+                  <span>{t('chat.input.waiting_payment', 'AI đang đợi bạn thanh toán đơn hàng "{{product}}"...', { product: qrPayload.order?.product_name || t('chat.qr.default_product', 'Sản phẩm') })}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setQrPayload(null)}
                   className="text-teal-600 hover:text-teal-800 font-semibold transition"
                 >
-                  Đóng QR
+                  {t('chat.input.close_qr', 'Đóng QR')}
                 </button>
               </div>
             )}
@@ -609,7 +604,7 @@ function ChatWidget() {
                   onClick={() => handlePromptClick(prompt)}
                   className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-teal-300 hover:text-teal-700"
                 >
-                  {prompt}
+                  {t(`chat.prompts.${prompt}`, prompt)}
                 </button>
               ))}
             </div>
@@ -618,14 +613,13 @@ function ChatWidget() {
               <input
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value)}
-                placeholder="Nhập câu hỏi hoặc yêu cầu mua hàng..."
+                placeholder={t('chat.input.placeholder', 'Nhập câu hỏi hoặc yêu cầu mua hàng...')}
                 className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
               />
 
-              {/* ── Nút gọi thoại ───────────────────────────── */}
               <button
                 type="button"
-                title={isInCall ? (isMuted ? 'Bỏ tắt mic' : 'Tắt mic') : 'Gọi thoại AI'}
+                title={isInCall ? (isMuted ? t('chat.input.unmute', 'Bỏ tắt mic') : t('chat.input.mute', 'Tắt mic')) : t('chat.input.call_ai', 'Gọi thoại AI')}
                 onClick={isInCall ? toggleMute : joinChannel}
                 disabled={connectionState === 'CONNECTING'}
                 className={[
@@ -647,7 +641,7 @@ function ChatWidget() {
                 disabled={!inputValue.trim() || isTyping}
                 className="h-11 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400"
               >
-                Gửi
+                {t('chat.input.send', 'Gửi')}
               </button>
             </form>
           </div>
