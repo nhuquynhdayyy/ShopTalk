@@ -1,6 +1,17 @@
 const { Server } = require('socket.io');
 
 let io = null;
+const liveHandoffSessions = new Map();
+
+const getSessionRoom = (sessionId) => `session:${sessionId}`;
+
+const buildLiveMessagePayload = ({ sessionId, sender, message, id, timestamp = new Date().toISOString() }) => ({
+  sessionId,
+  sender,
+  message: String(message || '').trim(),
+  id: id || `live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  timestamp,
+});
 
 const emitSocketEvent = (eventName, payload) => {
   if (!io) {
@@ -55,6 +66,56 @@ const emitPaymentReminder = ({ orderId, amount, productName, minutesWaiting, tim
   })
 );
 
+const handleJoinSession = (socket, payload = {}) => {
+  const sessionId = payload.sessionId;
+  if (!sessionId) return false;
+
+  socket.join(getSessionRoom(sessionId));
+  socket.data = socket.data || {};
+  socket.data.sessionId = sessionId;
+  socket.data.role = payload.role || socket.data.role || 'client';
+  return true;
+};
+
+const handleAcceptEscalation = (socket, payload = {}) => {
+  if (!io) return false;
+  const sessionId = payload.sessionId;
+  if (!sessionId) return false;
+
+  const room = getSessionRoom(sessionId);
+  socket.join(room);
+  socket.data = socket.data || {};
+  socket.data.sessionId = sessionId;
+  socket.data.role = 'staff';
+
+  const handoff = {
+    sessionId,
+    acceptedBy: payload.staffName || payload.staffId || 'staff',
+    acceptedAt: new Date().toISOString(),
+  };
+  liveHandoffSessions.set(sessionId, handoff);
+  io.to(room).emit('staff_joined', handoff);
+  return true;
+};
+
+const handleLiveMessage = (socket, payload = {}) => {
+  if (!io) return false;
+  const sessionId = payload.sessionId || socket.data?.sessionId;
+  const message = payload.message || payload.text || payload.content;
+  if (!sessionId || !message || !String(message).trim()) return false;
+
+  const livePayload = buildLiveMessagePayload({
+    sessionId,
+    sender: payload.sender || socket.data?.role || 'user',
+    message,
+    id: payload.id,
+    timestamp: payload.timestamp,
+  });
+
+  io.to(getSessionRoom(sessionId)).emit('live_message', livePayload);
+  return true;
+};
+
 /**
  * Khởi tạo Socket.io Server gắn liền với HTTP Server
  * @param {Object} server - Instance của HTTP server Express
@@ -69,6 +130,18 @@ const initSocket = (server) => {
 
   io.on('connection', (socket) => {
     console.log(`[Socket.io] 🔌 Client mới đã kết nối: ${socket.id}`);
+
+    socket.on('join_session', (payload) => {
+      handleJoinSession(socket, payload);
+    });
+
+    socket.on('accept_escalation', (payload) => {
+      handleAcceptEscalation(socket, payload);
+    });
+
+    socket.on('live_message', (payload) => {
+      handleLiveMessage(socket, payload);
+    });
 
     socket.on('disconnect', () => {
       console.log(`[Socket.io] ❌ Client đã ngắt kết nối: ${socket.id}`);
@@ -90,6 +163,10 @@ const __setIoForTest = (mockIo) => {
   io = mockIo;
 };
 
+const __resetLiveHandoffForTest = () => {
+  liveHandoffSessions.clear();
+};
+
 module.exports = {
   initSocket,
   getIo,
@@ -98,5 +175,9 @@ module.exports = {
   emitTranscriptReceived,
   emitEscalationRequest,
   emitPaymentReminder,
-  __setIoForTest
+  handleJoinSession,
+  handleAcceptEscalation,
+  handleLiveMessage,
+  __setIoForTest,
+  __resetLiveHandoffForTest
 };

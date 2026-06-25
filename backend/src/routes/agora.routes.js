@@ -264,10 +264,17 @@ const llmWebhookHandler = async (req, res) => {
       allContentLower.includes('dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat');
 
     if (!alreadyCreated) {
-      let detection = await detectVoiceOrder(messages);
-      if (!detection) {
-        detection = fallbackDetectVoiceOrder(messages);
-      } else {
+      const fallback = fallbackDetectVoiceOrder(messages);
+      let detection = fallback;
+
+      if (fallback.hasBuyIntent) {
+        const llmDetection = await detectVoiceOrder(messages);
+        if (llmDetection) {
+          detection = llmDetection;
+        }
+      }
+
+      if (detection && detection !== fallback) {
         const fallback = fallbackDetectVoiceOrder(messages);
         if (!detection.customerName && fallback.customerName) {
           detection.customerName = fallback.customerName;

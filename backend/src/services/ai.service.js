@@ -69,9 +69,100 @@ const chatSessions = new Map();
 
 // Map lưu trữ: sessionId -> agentId
 const activeAgoraAgents = new Map();
+const startingAgoraAgents = new Map();
 
 // Map lưu trữ: orderId -> sessionId
 const orderSessions = new Map();
+
+const latestOrderBySession = new Map();
+const repeatedQuestionState = new Map();
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const REPEATED_QUESTION_LIMIT = Number(process.env.ESCALATION_REPEAT_QUESTION_LIMIT || 2);
+const DEFAULT_ORDER_THRESHOLD_USDC = 100;
+
+const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+const isPositiveAmount = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
+
+const buildToolValidationError = (toolName, missingFields, message) => JSON.stringify({
+  success: false,
+  validation_error: true,
+  tool: toolName,
+  missing_fields: missingFields,
+  message
+});
+
+const parseToolArguments = (rawArgs) => {
+  if (!rawArgs) return {};
+  if (typeof rawArgs === 'object') return rawArgs;
+  try {
+    return JSON.parse(rawArgs);
+  } catch (_) {
+    return {};
+  }
+};
+
+const validateToolArgs = (name, args) => {
+  const fieldsByTool = {
+    check_inventory: ['product_name'],
+    create_order: ['product_name', 'amount', 'customer_name', 'customer_phone', 'customer_address'],
+    generate_payment_qr: ['order_id'],
+    get_reviews: ['product_name'],
+    log_feedback: ['feedback_text']
+  };
+
+  const missing = (fieldsByTool[name] || []).filter((field) => {
+    if (field === 'amount') return !isPositiveAmount(args[field]);
+    return !isNonEmptyString(args[field]);
+  });
+
+  if (missing.length > 0) {
+    return {
+      valid: false,
+      result: buildToolValidationError(
+        name,
+        missing,
+        `Tool ${name} thiếu tham số bắt buộc: ${missing.join(', ')}. Hãy hỏi khách hàng bổ sung thông tin còn thiếu, không tự bịa dữ liệu.`
+      )
+    };
+  }
+
+  return { valid: true };
+};
+
+const isRateLimitError = (error) => {
+  const message = error?.message || '';
+  return message.includes('Rate limit') ||
+    message.includes('rate limit') ||
+    message.includes('TPM') ||
+    message.includes('429');
+};
+
+const normalizeUserQuestion = (text) => normalize(text)
+  .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const getOrderEscalationThreshold = () => {
+  const value = Number(process.env.ESCALATION_ORDER_THRESHOLD_USDC);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_ORDER_THRESHOLD_USDC;
+};
+
+const getRepeatEscalation = (sessionId, userMessage) => {
+  const normalizedMessage = normalizeUserQuestion(userMessage);
+  if (!sessionId || normalizedMessage.length < 3) {
+    return { shouldEscalate: false, count: 1, normalizedMessage };
+  }
+
+  const previous = repeatedQuestionState.get(sessionId);
+  const nextCount = previous?.normalizedMessage === normalizedMessage ? previous.count + 1 : 1;
+  repeatedQuestionState.set(sessionId, { normalizedMessage, count: nextCount });
+
+  return {
+    shouldEscalate: nextCount >= REPEATED_QUESTION_LIMIT,
+    count: nextCount,
+    normalizedMessage
+  };
+};
 
 /**
  * Lấy lịch sử tin nhắn của một phiên chat, khởi tạo nếu chưa có
@@ -102,7 +193,32 @@ const OPENAI_TOOLS = [
 
 // ─── Logic thực thi các công cụ (Tool Execution) ───────────────────────────
 
-const executeTool = async (name, args, sessionId = null) => {
+const executeTool = async (name, args = {}, sessionId = null) => {
+  args = parseToolArguments(args);
+
+  if (name === 'generate_payment_qr') {
+    const latestOrderId = sessionId ? latestOrderBySession.get(sessionId) : null;
+    if (!isNonEmptyString(args.order_id) && latestOrderId) {
+      args.order_id = latestOrderId;
+    }
+    if (isNonEmptyString(args.order_id) && !UUID_REGEX.test(args.order_id)) {
+      if (latestOrderId) {
+        args.order_id = latestOrderId;
+      } else {
+        return buildToolValidationError(
+          name,
+          ['order_id'],
+          `order_id "${args.order_id}" không phải UUID hợp lệ. Chỉ dùng order_id thật do create_order trả về, không tự bịa mã đơn.`
+        );
+      }
+    }
+  }
+
+  const validation = validateToolArgs(name, args);
+  if (!validation.valid) {
+    return validation.result;
+  }
+
   console.log(`[AI Agent] 🛠️ Thực thi tool: ${name} với tham số:`, args);
   try {
     switch (name) {
@@ -124,6 +240,20 @@ const executeTool = async (name, args, sessionId = null) => {
       }
 
       case 'create_order': {
+        const threshold = getOrderEscalationThreshold();
+        const orderAmount = Number(args.amount);
+
+        if (orderAmount >= threshold) {
+          return JSON.stringify({
+            success: false,
+            escalate: true,
+            reason: 'high_value_order',
+            amount: orderAmount,
+            threshold,
+            message: `Đơn hàng ${orderAmount} USDC vượt ngưỡng ${threshold} USDC và cần chủ shop duyệt trước khi tạo đơn.`
+          });
+        }
+
         // Sinh reference key ngẫu nhiên dùng thư viện @solana/web3.js
         const referenceKey = Keypair.generate().publicKey.toBase58();
         const sellerWallet = args.seller_wallet || process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
@@ -142,6 +272,7 @@ const executeTool = async (name, args, sessionId = null) => {
 
         if (newOrder && sessionId) {
           orderSessions.set(newOrder.id, sessionId);
+          latestOrderBySession.set(sessionId, newOrder.id);
           console.log(`[Order Map] Mapped order ID ${newOrder.id} to session ID ${sessionId}`);
         }
 
@@ -253,13 +384,14 @@ const checkEscalation = (text) => {
  * @param {string} sessionId - ID phiên chat
  * @param {string} userMessage - Tin nhắn cuối cùng của khách
  */
-const emitEscalationEvent = (sessionId, userMessage) => {
+const emitEscalationEvent = (sessionId, userMessage, reason = 'manual_request') => {
   try {
     const io = getIo();
     if (io) {
       const payload = {
         sessionId,
         message: userMessage,
+        reason,
         timestamp: new Date().toISOString()
       };
       io.emit('escalation_request', payload);
@@ -378,12 +510,25 @@ const chat = async (sessionId, userMessage) => {
   // 1. Kiểm tra logic Escalation ngay trước khi gửi LLM
   if (checkEscalation(userMessage)) {
     // Bắn WebSocket event tới Dashboard để nhân viên biết có khách cần hỗ trợ
-    emitEscalationEvent(sessionId, userMessage);
+    emitEscalationEvent(sessionId, userMessage, 'manual_request');
     return {
       success: true,
       reply: "Dạ em xin lỗi vì sự bất tiện này. Em sẽ chuyển ngay cuộc trò chuyện này sang nhân viên hỗ trợ thực tế để xử lý nhanh nhất cho anh/chị ạ! 🙏",
       function_call: null,
       escalate: true
+    };
+  }
+
+  const repeatCheck = getRepeatEscalation(sessionId, userMessage);
+  if (repeatCheck.shouldEscalate) {
+    const reply = 'Dạ em thấy anh/chị đang phải hỏi lại cùng một vấn đề. Em sẽ chuyển cuộc trò chuyện này sang nhân viên thật để hỗ trợ chính xác hơn ạ.';
+    emitEscalationEvent(sessionId, userMessage, 'repeated_question');
+    return {
+      success: true,
+      reply,
+      function_call: null,
+      escalate: true,
+      escalationReason: 'repeated_question'
     };
   }
 
@@ -452,16 +597,35 @@ const chat = async (sessionId, userMessage) => {
       let orderId = null;
       let productName = null;
       let amount = null;
+      let toolEscalation = null;
 
       for (const toolCall of assistantMessage.tool_calls) {
         const name = toolCall.function.name;
-        const args = JSON.parse(toolCall.function.arguments);
+        const args = parseToolArguments(toolCall.function.arguments);
 
         // Thực thi tool
         const toolResult = await executeTool(name, args, sessionId);
 
         // Lưu thông tin phục vụ trả về trực tiếp cho UI nếu có
         let cleanToolResultStr = toolResult;
+        try {
+          const parsed = JSON.parse(toolResult);
+          if (name === 'check_inventory' && parsed.found === false) {
+            toolEscalation = {
+              reason: 'inventory_not_found',
+              message: parsed.message || `Không tìm thấy sản phẩm "${args.product_name || userMessage}" trong kho.`,
+              reply: 'Dạ hiện tại em chưa tìm thấy sản phẩm này trong kho. Em sẽ chuyển sang nhân viên thật để kiểm tra và hỗ trợ anh/chị chính xác hơn ạ.'
+            };
+          }
+          if (parsed.escalate) {
+            toolEscalation = {
+              reason: parsed.reason || 'tool_escalation',
+              message: parsed.message || userMessage,
+              reply: parsed.message || 'Dạ trường hợp này cần nhân viên thật hỗ trợ. Em sẽ chuyển cuộc trò chuyện ngay ạ.'
+            };
+          }
+        } catch (_) { }
+
         if (name === 'generate_payment_qr' || name === 'create_order') {
           try {
             const parsed = JSON.parse(toolResult);
@@ -499,6 +663,23 @@ const chat = async (sessionId, userMessage) => {
         });
       }
 
+      if (toolEscalation) {
+        emitEscalationEvent(sessionId, toolEscalation.message, toolEscalation.reason);
+        const reply = toolEscalation.reply;
+        sessionMessages.push({ role: 'assistant', content: reply });
+        return {
+          success: true,
+          reply,
+          function_call: null,
+          escalate: true,
+          escalationReason: toolEscalation.reason,
+          qrCodeImage,
+          orderId,
+          productName,
+          amount
+        };
+      }
+
       // Gọi lại API lần thứ 2 với kết quả của tool
       response = await fetch(apiUrl, {
         method: 'POST',
@@ -522,8 +703,9 @@ const chat = async (sessionId, userMessage) => {
       sessionMessages.push(assistantMessage);
 
       // Xóa cú pháp <function=...> rác nếu LLM bịa ra trong text
-      const cleanReply = assistantMessage.content.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
-      const { text_reply, function_call } = parseReplyContent(assistantMessage.content);
+      const assistantContent = assistantMessage.content || '';
+      const cleanReply = assistantContent.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
+      const { text_reply, function_call } = parseReplyContent(assistantContent);
       return {
         success: true,
         reply: cleanReply,
@@ -539,8 +721,9 @@ const chat = async (sessionId, userMessage) => {
       sessionMessages.push(assistantMessage);
 
       // Xóa cú pháp <function=...> rác nếu LLM bịa ra trong text
-      const cleanReply = assistantMessage.content.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
-      const { text_reply, function_call } = parseReplyContent(assistantMessage.content);
+      const assistantContent = assistantMessage.content || '';
+      const cleanReply = assistantContent.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
+      const { text_reply, function_call } = parseReplyContent(assistantContent);
       return {
         success: true,
         reply: cleanReply,
@@ -551,6 +734,14 @@ const chat = async (sessionId, userMessage) => {
 
   } catch (error) {
     console.error('[AI Agent] ❌ Lỗi xử lý LLM Chat:', error.message);
+    if (isRateLimitError(error)) {
+      return {
+        success: true,
+        reply: 'Dạ hiện tại AI đang nhận hơi nhiều yêu cầu cùng lúc. Anh/chị vui lòng chờ vài giây rồi nhắn lại giúp em nhé.',
+        escalate: false,
+        retryable: true
+      };
+    }
     return {
       success: false,
       reply: `Xin lỗi, hệ thống AI đang gặp sự cố kết nối: ${error.message}. Em có thể giúp gì thêm cho anh/chị?`,
@@ -604,6 +795,29 @@ const generateAgoraToken = (channelName, uid) => {
  * @param {string} sessionId - ID phiên chat text để đồng bộ ngữ cảnh (Context Sync)
  */
 const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', sessionId = null) => {
+  const finalSessionId = sessionId || channelName;
+
+  if (activeAgoraAgents.has(finalSessionId)) {
+    const existingAgentId = activeAgoraAgents.get(finalSessionId);
+    console.log(`[Agora] Agent đã tồn tại cho session ${finalSessionId}, bỏ qua start lặp.`);
+    return {
+      success: true,
+      agentName: `existing-${finalSessionId}`,
+      data: { agent_id: existingAgentId, status: 'RUNNING', reused: true }
+    };
+  }
+
+  if (startingAgoraAgents.has(finalSessionId)) {
+    console.log(`[Agora] Agent đang được khởi động cho session ${finalSessionId}, bỏ qua start lặp.`);
+    return {
+      success: true,
+      agentName: `starting-${finalSessionId}`,
+      data: { agent_id: null, status: 'STARTING', reused: true }
+    };
+  }
+
+  startingAgoraAgents.set(finalSessionId, true);
+
   try {
     const appId = process.env.AGORA_APP_ID;
     const customerId = process.env.AGORA_CUSTOMER_ID;
@@ -693,6 +907,7 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
 
     if (!response.ok) {
       console.error('[Agora] ❌ Lỗi gọi API Join:', JSON.stringify(data));
+      startingAgoraAgents.delete(finalSessionId);
       return { success: false, message: JSON.stringify(data), data };
     }
 
@@ -701,15 +916,16 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
     console.log(`[Agora] 📥 Status: ${data.status}`);
 
     if (data.agent_id) {
-      const finalSessionId = sessionId || channelName;
       activeAgoraAgents.set(finalSessionId, data.agent_id);
       console.log(`[Agora Map] Mapped session ID ${finalSessionId} to Agent ID ${data.agent_id}`);
     }
 
+    startingAgoraAgents.delete(finalSessionId);
     return { success: true, agentName, data };
 
   } catch (error) {
     console.error('[Agora] ❌ Exception:', error.message);
+    startingAgoraAgents.delete(finalSessionId);
     return { success: false, message: error.message };
   }
 };
