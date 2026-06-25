@@ -1,0 +1,24 @@
+{
+  "name": "messenger-solana-bot",
+  "version": "1.0.0",
+  "description": "Facebook Messenger Chatbot integrated with Solana Pay",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@solana/pay": "^0.1.1",
+    "@solana/web3.js": "^1.91.8",
+    "axios": "^1.7.2",
+    "bignumber.js": "^9.1.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "form-data": "^4.0.0",
+    "qrcode": "^1.5.3"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
