@@ -181,9 +181,9 @@ app.post('/webhook', (req, res) => {
 });
 
 // Khởi chạy Express Server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n======================================================`);
   console.log(`🚀 Queen Shop Bot đang chạy tại port: ${PORT}`);
-  console.log(`🔗 Webhook endpoint: http://localhost:${PORT}/webhook`);
+  console.log(`🔗 Webhook endpoint sẵn sàng nhận dữ liệu`);
   console.log(`======================================================\n`);
 });
