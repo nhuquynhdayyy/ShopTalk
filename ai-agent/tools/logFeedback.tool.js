@@ -97,15 +97,17 @@ async function logFeedbackHandler(args, deps = {}) {
       product_sku: product_sku || null,
     };
 
-    // Lưu vào chat_history với sender = "feedback", type = "feedback"
+    // Lưu vào chat_history với sender = "ai", type = "text"
+    // Content chứa cả feedback data dưới dạng JSON
     const insertQuery = `
       INSERT INTO chat_history (id, session_id, sender, type, content, timestamp)
-      VALUES (gen_random_uuid(), $1, 'feedback', 'feedback', $2, NOW())
+      VALUES (gen_random_uuid(), $1, 'ai', 'text', $2, NOW())
       RETURNING id, timestamp
     `;
 
     // Lưu nội dung kèm metadata dưới dạng JSON string
     const contentWithMeta = JSON.stringify({
+      type: 'feedback',
       text: content,
       meta: feedbackMeta,
     });

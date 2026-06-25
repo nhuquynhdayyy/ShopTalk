@@ -9,6 +9,7 @@ const axios = require('axios');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
 const { getIo } = require('../websocket/socket.server');
+const db = require('../config/db');
 const fs = require('fs');
 const path = require('path');
 
@@ -77,7 +78,7 @@ const executeTool = async (name, args, sessionId) => {
   try {
     switch (name) {
       case 'check_inventory': {
-        const product = checkInventory(args.product_name);
+        const product = await checkInventory(args.product_name);
         if (!product) {
           return JSON.stringify({
             found: false,
@@ -156,14 +157,20 @@ const executeTool = async (name, args, sessionId) => {
         console.log(`[AI Agent] 🔍 Lấy đánh giá cho sản phẩm: "${args.product_sku || args.product_name}"`);
         // Fallback to product_name if product_sku is missing
         const sku = args.product_sku || args.product_name; 
-        const result = await getReviewsTool.handler({ product_sku: sku, limit: args.limit, min_rating: args.min_rating });
+        const result = await getReviewsTool.handler(
+          { product_sku: sku, limit: args.limit, min_rating: args.min_rating },
+          { db: db.pool, logger: console }
+        );
         return JSON.stringify(result);
       }
 
       case 'log_feedback': {
         args.session_id = args.session_id || sessionId || 'unknown';
         console.log(`[AI Agent] 📝 Ghi nhận phản hồi session: "${args.session_id}" | Nội dung: "${args.content}"`);
-        const result = await logFeedbackTool.handler(args);
+        const result = await logFeedbackTool.handler(
+          args,
+          { db: db.pool, logger: console }
+        );
         return JSON.stringify(result);
       }
 
