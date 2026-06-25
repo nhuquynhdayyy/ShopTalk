@@ -24,6 +24,9 @@ PAGE_ACCESS_TOKEN=your_facebook_page_access_token_here
 # Địa chỉ ví Solana của bạn (để nhận tiền từ khách hàng)
 MERCHANT_WALLET=your_solana_wallet_address_here
 
+# API Key cho dịch vụ Groq AI
+GROQ_API_KEY=your_groq_api_key_here
+
 # Port khởi chạy server
 PORT=3000
 ```
@@ -65,25 +68,35 @@ Hãy copy URL có dạng **`https://`** này.
 ---
 
 ## 🧪 Chạy thử nghiệm nhanh (Quick Test)
-Nếu muốn kiểm tra nhanh logic tạo Solana Pay URL và QR Code mà không cần cấu hình Facebook Webhook:
+
+### 1. Kiểm tra nhanh logic tạo Solana Pay QR
+Nếu muốn kiểm tra nhanh logic sinh URL Solana Pay và QR Code độc lập:
 1. Mở terminal tại thư mục dự án và chạy:
    ```bash
    node test-qr.js
    ```
 2. Dự án sẽ tự động dùng địa chỉ ví Solana test công cộng để sinh URL Solana Pay và lưu ảnh QR code tại file `test-qr.png` ngay trong thư mục này.
-3. Bạn có thể mở ảnh `test-qr.png` và dùng ví Phantom trên điện thoại quét để kiểm tra thử.
+
+### 2. Kiểm tra nhanh logic hội thoại và trích xuất thực thể của Groq AI
+Nếu muốn kiểm tra chatbot hội thoại thông minh tự động trích xuất sản phẩm, tên, SĐT, địa chỉ:
+1. Cấu hình biến `GROQ_API_KEY` hợp lệ trong file `.env`.
+2. Mở terminal tại thư mục dự án và chạy:
+   ```bash
+   node test-groq.js
+   ```
+3. Script sẽ giả lập một đoạn hội thoại của khách từ chào hỏi -> chọn sản phẩm Áo hoodie -> cung cấp tên -> cung cấp SĐT, địa chỉ -> xác nhận mua hàng. Bạn sẽ nhìn thấy chi tiết phản hồi của bot và trạng thái session được AI cập nhật theo từng bước.
 
 ## ⚡ Thử nghiệm hoạt động thực tế với Messenger (Flow kiểm tra)
 1. Mở Messenger của Facebook Page bạn đã tích hợp bot.
-2. Gửi một tin nhắn bất kỳ có chứa số tiền, ví dụ:
-   - *"Mua áo size L - 0.5 SOL"*
-   - *"0.02"*
-   - *"thanh toan 0.1"*
-3. Server nhận được tin nhắn từ Webhook:
-   - Nó phân tích số tiền (nếu không tìm thấy số nào, bot sẽ tự động nhận giá trị mặc định là `0.1 SOL`).
-   - Nó tạo Solana Pay URL với địa chỉ nhận tiền là `MERCHANT_WALLET`.
-   - Sinh QR Code dưới dạng file ảnh Buffer.
-   - Gọi Messenger Upload API gửi ảnh QR trực tiếp vào ô chat.
-   - Gửi tiếp tin nhắn text hướng dẫn: *"Scan QR này bằng ví Phantom để thanh toán [amount] SOL nhé!"*.
-4. Bạn mở ứng dụng ví **Phantom** trên điện thoại (đã chuyển sang mạng Devnet/Mainnet tương ứng với cấu hình ví của bạn), nhấn nút quét QR ở góc trên và quét QR code được gửi trong Messenger để thanh toán.
-
+2. Gửi lời chào, ví dụ: *"Chào shop"*
+   - Bot sẽ tự động chào bạn và giới thiệu danh sách sản phẩm mẫu (Áo thun basic, Áo hoodie, Quần jean, Váy hoa) kèm giá bằng SOL.
+3. Chọn một sản phẩm bạn muốn mua, ví dụ: *"Mình muốn mua cái Áo hoodie"*
+   - Bot ghi nhận sản phẩm và bắt đầu thu thập thông tin giao hàng: *"Bạn vui lòng cho shop xin Họ tên để làm đơn hàng nhé!"*
+4. Cung cấp tên của bạn: *"Mình là Nguyễn Văn B"*
+   - Bot ghi nhận tên và hỏi tiếp số điện thoại: *"Cảm ơn bạn B, cho mình xin số điện thoại nhận hàng nhé."*
+5. Cung cấp số điện thoại và địa chỉ nhận hàng: *"Số mình là 0912345678, giao tới 234 Trần Hưng Đạo, Quận 1"*
+   - Bot nhận diện đầy đủ thông tin, in ra tóm tắt đơn hàng và hỏi bạn có muốn Xác nhận để tiến hành thanh toán hay không.
+6. Xác nhận thanh toán đơn hàng: *"Xác nhận mua"*
+   - Khi đó, Webhook ghi nhận intent = "confirm", thực hiện tạo Solana Pay QR code dựa trên giá sản phẩm đã chọn (0.1 SOL đối với Áo hoodie).
+   - Bot upload ảnh QR code lên Messenger và hiển thị mã QR kèm tóm tắt đơn hàng + link thanh toán trực tiếp.
+7. Bạn mở ví **Phantom** trên điện thoại, quét mã QR và xác nhận giao dịch để hoàn tất đơn hàng.

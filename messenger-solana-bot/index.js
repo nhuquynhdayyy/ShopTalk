@@ -3,42 +3,23 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { generatePaymentQR } = require('./solanaPay');
 const { sendTextMessage, sendQRImage } = require('./messenger');
+const { analyzeConversation, PRODUCTS } = require('./groqService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Sử dụng body-parser để parse dữ liệu JSON từ Facebook gửi về
 app.use(bodyParser.json());
 
-/**
- * Hàm phân tích số tiền từ tin nhắn của khách hàng.
- * Tìm số thực hoặc số nguyên xuất hiện đầu tiên.
- * Mặc định trả về 0.1 SOL nếu không tìm thấy số nào.
- * 
- * @param {string} text - Tin nhắn của khách hàng
- * @returns {number} Số tiền đã parse được
- */
-function parseAmountFromText(text) {
-  if (!text) return 0.1;
-  
-  // Tìm kiếm số nguyên hoặc số thập phân trong tin nhắn (ví dụ: "0.5", "10", "1.25")
-  const match = text.match(/\b\d+(?:\.\d+)?\b/);
-  if (match) {
-    const amount = parseFloat(match[0]);
-    if (!isNaN(amount) && amount > 0) {
-      return amount;
-    }
-  }
-  return 0.1; // Mặc định là 0.1 SOL nếu không phân tích được
-}
+// In-memory session quản lý trạng thái đơn hàng và lịch sử chat của từng PSID
+const sessions = {};
 
 // Endpoint kiểm tra trạng thái hoạt động của server
 app.get('/', (req, res) => {
-  res.send('Solana Pay Messenger Bot đang hoạt động!');
+  res.send('Queen Shop Solana Pay Bot tích hợp Groq AI đang hoạt động!');
 });
 
 /**
- * GET /webhook: Dùng để xác thực webhook với Meta Developer Console
+ * GET /webhook: Dùng để xác thực webhook với Meta Developer Console (Giữ nguyên không thay đổi)
  */
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -61,51 +42,133 @@ app.get('/webhook', (req, res) => {
 });
 
 /**
- * POST /webhook: Nhận các sự kiện từ Facebook Messenger
+ * POST /webhook: Nhận và xử lý tin nhắn của khách hàng từ Facebook Messenger
  */
 app.post('/webhook', (req, res) => {
   const body = req.body;
 
-  // Kiểm tra xem đây có phải là sự kiện từ trang Facebook hay không
   if (body.object === 'page') {
-    // Phản hồi ngay lập tức với mã 200 OK để Facebook biết đã nhận tin nhắn, tránh bị retry liên tục
+    // Trả về 200 OK ngay lập tức cho Facebook để báo đã nhận sự kiện, tránh bị retry liên tục
     res.status(200).send('EVENT_RECEIVED');
 
-    // Duyệt qua từng entry (Facebook có thể gộp nhiều sự kiện vào một request)
     body.entry.forEach(async (entry) => {
       if (entry.messaging) {
         for (const webhookEvent of entry.messaging) {
-          // Bỏ qua tin nhắn dạng echo (tin nhắn của chính page gửi đi)
-          // Chỉ xử lý tin nhắn text hợp lệ của người dùng gửi đến
+          // Bỏ qua các sự kiện echo (tin nhắn bot tự gửi) và chỉ xử lý tin nhắn văn bản hợp lệ
           if (webhookEvent.message && !webhookEvent.message.is_echo && webhookEvent.message.text) {
             const senderPsid = webhookEvent.sender.id;
             const messageText = webhookEvent.message.text;
 
             console.log(`\n[Webhook] Đã nhận tin nhắn từ khách hàng (PSID: ${senderPsid}): "${messageText}"`);
 
+            // Khởi tạo session cho khách hàng nếu chưa tồn tại
+            if (!sessions[senderPsid]) {
+              sessions[senderPsid] = {
+                productName: null,
+                price: null,
+                customerName: null,
+                phone: null,
+                address: null,
+                history: []
+              };
+            }
+
+            const session = sessions[senderPsid];
+
+            // Thêm tin nhắn của khách hàng vào lịch sử hội thoại
+            session.history.push({ role: 'user', content: messageText });
+            // Giới hạn độ dài lịch sử hội thoại tránh quá tải tokens của Groq (giữ 20 tin nhắn gần nhất)
+            if (session.history.length > 20) {
+              session.history = session.history.slice(-20);
+            }
+
             try {
-              // 1. Parse số tiền từ tin nhắn (ví dụ: "mua áo 0.5 SOL" -> 0.5)
-              const amount = parseAmountFromText(messageText);
-              console.log(`[Process] Số tiền phân tích được: ${amount} SOL`);
+              // 1. Phân tích hội thoại bằng Groq AI
+              const analysis = await analyzeConversation(session.history, session);
+              const { intent, product, customerName, phone, address, reply } = analysis;
 
-              // 2. Tạo Solana Pay URL và QR Code dạng PNG Image Buffer
-              const { url, qrBuffer } = await generatePaymentQR(amount);
+              console.log(`[Groq Analysis] Intent nhận diện: "${intent}"`);
+              console.log(`[Groq Analysis] Thông tin trích xuất:`, { product, customerName, phone, address });
 
-              // 3. Gửi ảnh QR Code về Messenger cho khách hàng (dạng multipart/form-data upload)
-              await sendQRImage(senderPsid, qrBuffer);
+              // 2. Đồng bộ hóa thông tin trích xuất từ AI vào Session bộ nhớ
+              if (product) {
+                session.productName = product;
+                const matchedProduct = PRODUCTS.find(p => p.name.toLowerCase() === product.toLowerCase());
+                if (matchedProduct) {
+                  session.price = matchedProduct.price;
+                }
+              }
+              if (customerName) session.customerName = customerName;
+              if (phone) session.phone = phone;
+              if (address) session.address = address;
 
-              // 4. Gửi kèm tin nhắn văn bản giải thích và hướng dẫn thanh toán
-              const guideText = `Scan QR này bằng ví Phantom để thanh toán ${amount} SOL nhé!\n\n(Hoặc click vào link để thanh toán nếu dùng trình duyệt có ví: ${url})`;
-              await sendTextMessage(senderPsid, guideText);
+              console.log(`[Session State] Trạng thái hiện tại:`, {
+                productName: session.productName,
+                price: session.price,
+                customerName: session.customerName,
+                phone: session.phone,
+                address: session.address
+              });
 
-              console.log(`[Process] Đã hoàn thành gửi yêu cầu thanh toán ${amount} SOL cho ${senderPsid}\n`);
+              // 3. Xử lý logic dựa trên intent AI trả về
+              if (intent === 'confirm') {
+                // Kiểm tra xem đã thu thập đủ toàn bộ thông tin đơn hàng chưa
+                const isDataComplete = session.productName && session.price && session.customerName && session.phone && session.address;
+
+                if (isDataComplete) {
+                  // Gửi lời chào / xác nhận từ AI trước
+                  await sendTextMessage(senderPsid, reply);
+
+                  // Tạo Solana Pay QR Code từ giá của sản phẩm trong session
+                  console.log(`[Process] Đang khởi tạo mã thanh toán Solana Pay cho ${session.productName} giá ${session.price} SOL...`);
+                  const { url, qrBuffer } = await generatePaymentQR(session.price);
+
+                  // Gửi ảnh QR Code lên Messenger
+                  await sendQRImage(senderPsid, qrBuffer);
+
+                  // Gửi tóm tắt chi tiết đơn hàng kèm link thanh toán trực tiếp
+                  const confirmationMsg = `📋 XÁC NHẬN ĐƠN HÀNG THÀNH CÔNG:\n` +
+                    `--------------------------------------\n` +
+                    `🛍️ Sản phẩm: ${session.productName}\n` +
+                    `💰 Giá trị đơn: ${session.price} SOL\n` +
+                    `👤 Người nhận: ${session.customerName}\n` +
+                    `📞 Số điện thoại: ${session.phone}\n` +
+                    `📍 Địa chỉ giao hàng: ${session.address}\n` +
+                    `--------------------------------------\n` +
+                    `👉 Quét mã QR ở trên bằng ví Phantom để thanh toán.\n` +
+                    `🔗 Link thanh toán trực tiếp: ${url}`;
+
+                  await sendTextMessage(senderPsid, confirmationMsg);
+
+                  // Reset session sau khi chốt đơn thành công để khách hàng có thể mua đơn hàng tiếp theo
+                  console.log(`[Process] Đã gửi thông tin thanh toán cho ${senderPsid}. Xóa session.`);
+                  delete sessions[senderPsid];
+                } else {
+                  // Nếu Groq trả về intent 'confirm' nhưng trong session lưu trữ thực tế vẫn bị thiếu trường
+                  console.log(`[Process] Intent là confirm nhưng session chưa đủ dữ liệu. Yêu cầu điền thêm.`);
+                  const missingFieldsReply = `Mình chưa thu thập đủ thông tin để tạo đơn hàng. Bạn vui lòng cung cấp thêm:\n` +
+                    (!session.productName ? `- Chọn sản phẩm (Áo thun basic, Áo hoodie, Quần jean, Váy hoa)\n` : '') +
+                    (!session.customerName ? `- Họ và tên của bạn\n` : '') +
+                    (!session.phone ? `- Số điện thoại liên hệ\n` : '') +
+                    (!session.address ? `- Địa chỉ giao nhận nhận hàng\n` : '') +
+                    `Cảm ơn bạn!`;
+
+                  await sendTextMessage(senderPsid, missingFieldsReply);
+                  session.history.push({ role: 'assistant', content: missingFieldsReply });
+                }
+              } else {
+                // Với các intent khác (greeting, browse, order, other), gửi tin nhắn AI trả về bình thường
+                await sendTextMessage(senderPsid, reply);
+                // Lưu phản hồi của trợ lý vào lịch sử trò chuyện
+                session.history.push({ role: 'assistant', content: reply });
+              }
+
             } catch (err) {
-              console.error(`[Process] Lỗi khi xử lý tin nhắn của ${senderPsid}:`, err);
-              // Phản hồi lại khách hàng về sự cố
+              console.error(`[Webhook Error] Gặp lỗi khi xử lý tin nhắn của ${senderPsid}:`, err);
               try {
-                await sendTextMessage(senderPsid, "Rất tiếc, đã có lỗi xảy ra khi tạo mã QR Solana Pay. Vui lòng thử lại sau.");
+                await sendTextMessage(senderPsid, "Hệ thống đang gặp sự cố khi trò chuyện với AI hoặc tạo mã thanh toán. Bạn vui lòng thử lại sau nhé!");
               } catch (sendErr) {
-                console.error("[Process] Không thể gửi tin nhắn báo lỗi đến khách hàng:", sendErr.message);
+                console.error("[Webhook Error] Không thể gửi tin nhắn báo lỗi đến khách hàng:", sendErr.message);
               }
             }
           }
@@ -113,7 +176,6 @@ app.post('/webhook', (req, res) => {
       }
     });
   } else {
-    // Trả về 404 nếu request không phải từ page
     res.sendStatus(404);
   }
 });
@@ -121,7 +183,7 @@ app.post('/webhook', (req, res) => {
 // Khởi chạy Express Server
 app.listen(PORT, () => {
   console.log(`\n======================================================`);
-  console.log(`🚀 Server đang chạy tại port: ${PORT}`);
+  console.log(`🚀 Queen Shop Bot đang chạy tại port: ${PORT}`);
   console.log(`🔗 Webhook endpoint: http://localhost:${PORT}/webhook`);
   console.log(`======================================================\n`);
 });

@@ -29,7 +29,7 @@ ShopTalk tái định nghĩa thương mại điện tử bằng cách kết hợ
 
 ### 🔊 1. Conversational AI Chat (Hội thoại Voice & Text)
 *   **Trải nghiệm rảnh tay:** Tích hợp **Agora Voice Channel** cho phép khách hàng nhấn chọn "Voice Call" và nói chuyện trực tiếp với AI bán hàng.
-*   **Tốc độ siêu tốc (<1s):** Sự kết hợp giữa Agora RTC ASR/TTS và **Groq API (`llama-3.3-70b-versatile`)** giúp thời gian sinh văn bản và phản hồi giọng nói đạt mức **dưới 1 giây**, loại bỏ cảm giác chờ đợi gây khó chịu như các AI truyền thống.
+*   **Tốc độ siêu tốc (<1s):** Sự kết hợp giữa Agora RTC ASR/TTS và **Groq API (`llama-3.1-8b-instant`)** giúp thời gian sinh văn bản và phản hồi giọng nói đạt mức **dưới 1 giây**, loại bỏ cảm giác chờ đợi gây khó chịu như các AI truyền thống.
 *   **Tự động điền đơn (Slot Filling):** AI tự động trích xuất thông tin khách hàng nói (tên, số điện thoại, địa chỉ nhận hàng) để gọi các công cụ lập đơn hàng tự động mà khách không cần điền tay bất kỳ biểu mẫu nào.
 
 ### 💳 2. Solana Pay On-chain Payment (Thanh toán Web3 tức thì)
