@@ -621,7 +621,7 @@ const chat = async (sessionId, userMessage) => {
     apiKey = groqApiKey;
     apiUrl = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
     // modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-    modelName = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+    modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
     console.log(`[AI Agent] 🚀 Sử dụng Groq API với Model: ${modelName}`);
   } else if (openaiApiKey) {
     apiKey = openaiApiKey;
@@ -929,7 +929,7 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
         llm: {
           vendor: 'custom',
           url: `${ngrokUrl}/api/agora/llm-webhook?sessionId=${encodeURIComponent(sessionId || channelName)}`,
-          params: { model: 'llama-3.1-8b-instant' },
+          params: { model: 'llama-3.3-70b-versatile' },
           failure_message: 'Dạ, em xin lỗi, đường truyền đang gặp chút vấn đề. Anh chị vui lòng đợi em một xíu ạ.',
           greeting_message: 'Dạ, ShopTalk xin chào anh/chị! Em là nhân viên tư vấn ảo của cửa hàng. Anh chị đang quan tâm đến mẫu điện thoại Solana Saga hay phụ kiện nào bên em ạ?',
           system_messages: [

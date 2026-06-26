@@ -80,9 +80,9 @@ Cấu trúc JSON phản hồi như sau:
       ...history
     ];
 
-    console.log(`[Groq] Đang gọi model llama-3.1-8b-instant để phân tích...`);
+    console.log(`[Groq] Đang gọi model llama-3.3-70b-versatile để phân tích...`);
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+      model: 'llama-3.3-70b-versatile',
       messages: messages,
       response_format: { type: 'json_object' },
       temperature: 0.2 // Thiết lập nhiệt độ thấp để nhận kết quả phân tích nhất quán
