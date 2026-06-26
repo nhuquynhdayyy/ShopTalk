@@ -328,12 +328,24 @@ function ChatWidget() {
   const [paidReceipt, setPaidReceipt] = useState(null);
   const chatEndRef = useRef(null);
 
-  const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute } = useAgoraVoice(sessionId);
+  const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute, setMute } = useAgoraVoice(sessionId);
   const { setIsInCall: setGlobalInCall, registerCallHandlers } = useCallStatus();
 
   useEffect(() => {
     setGlobalInCall(isInCall);
   }, [isInCall, setGlobalInCall]);
+
+  useEffect(() => {
+    if (isInCall && setMute) {
+      if (qrPayload) {
+        console.log('[Agora] Muting microphone because QR Modal is showing');
+        setMute(true);
+      } else {
+        console.log('[Agora] Unmuting microphone because QR Modal is closed');
+        setMute(false);
+      }
+    }
+  }, [qrPayload, isInCall, setMute]);
 
   useEffect(() => {
     registerCallHandlers({
@@ -387,6 +399,11 @@ function ChatWidget() {
   }, [qrPayload, t]);
 
   const handleTranscriptReceived = useCallback((payload = {}) => {
+    if (isMuted) {
+      console.log('[Agora] Transcript blocked because mic is muted:', payload.transcript || payload.content);
+      return;
+    }
+
     const transcriptSessionId = payload.session_id || payload.sessionId;
     if (transcriptSessionId && sessionId && transcriptSessionId !== sessionId) return;
 
@@ -421,7 +438,7 @@ function ChatWidget() {
         ];
       }
     });
-  }, [sessionId]);
+  }, [sessionId, isMuted]);
 
   const handleOrderPaid = useCallback((payload = {}) => {
     const paidOrder = normalizePaidOrder(payload);
@@ -444,6 +461,33 @@ function ChatWidget() {
       }
     ]);
   }, [normalizePaidOrder, qrPayload, t]);
+
+  const handlePaymentConfirmed = useCallback((payload = {}) => {
+    console.log('[Socket] Nhận sự kiện payment_confirmed:', payload);
+    const confirmedOrderId = payload.orderId || payload.id;
+    const currentQrOrderId = qrPayload?.order?.id;
+
+    if (confirmedOrderId && currentQrOrderId && confirmedOrderId === currentQrOrderId) {
+      setQrPayload(null);
+
+      const paidOrder = {
+        id: confirmedOrderId,
+        product_name: qrPayload?.order?.product_name || t('components.order.default_product', 'Đơn hàng ShopTalk'),
+        amount: qrPayload?.order?.amount || 0,
+        status: 'paid'
+      };
+      setPaidReceipt(paidOrder);
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: `confirmed-${confirmedOrderId}-${Date.now()}`,
+          role: 'assistant',
+          content: t('chat.system.payment_confirmed_msg', 'Hệ thống đã nhận được thanh toán của bạn, cảm ơn!')
+        }
+      ]);
+    }
+  }, [qrPayload, t]);
 
   const handleStaffJoined = useCallback((payload = {}) => {
     console.log('[Socket] Nhân viên đã tham gia phòng:', payload);
@@ -473,6 +517,7 @@ function ChatWidget() {
     voice_order_created: handleVoiceOrderCreated,
     transcript_received: handleTranscriptReceived,
     order_paid: handleOrderPaid,
+    payment_confirmed: handlePaymentConfirmed,
     staff_joined: handleStaffJoined,
     agent_message: handleAgentMessage
   });

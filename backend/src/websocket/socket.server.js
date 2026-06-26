@@ -33,6 +33,7 @@ const emitOrderPaid = (order) => {
     paidAt: new Date().toISOString(),
   };
 
+  emitSocketEvent('payment_confirmed', { orderId: order.id });
   return emitSocketEvent('order_paid', payload);
 };
 

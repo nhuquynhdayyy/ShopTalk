@@ -124,13 +124,25 @@ export function useShoAgoraVoice(channelName) {
     }
   };
 
+  const setMute = async (mute) => {
+    if (!localAudioTrackRef.current) return;
+
+    try {
+      await localAudioTrackRef.current.setEnabled(!mute);
+      setIsMuted(mute);
+    } catch (error) {
+      console.error('Error setting mute:', error);
+    }
+  };
+
   return {
     isInCall,
     isMuted,
     connectionState,
     joinChannel,
     leaveChannel,
-    toggleMute
+    toggleMute,
+    setMute
   };
 }
 

@@ -45,7 +45,7 @@ function createMockIo() {
 
 // ─── 1. order_paid ──────────────────────────────────────────────────────────
 
-test('emitOrderPaid: bắn đúng tên event "order_paid"', () => {
+test('emitOrderPaid: bắn đúng tên event "order_paid" và "payment_confirmed"', () => {
   const mockIo = createMockIo();
   __setIoForTest(mockIo);
 
@@ -57,8 +57,10 @@ test('emitOrderPaid: bắn đúng tên event "order_paid"', () => {
     tx_signature: 'sig-xyz',
   });
 
-  assert.strictEqual(mockIo.calls.length, 1);
-  assert.strictEqual(mockIo.calls[0].eventName, 'order_paid');
+  assert.strictEqual(mockIo.calls.length, 2);
+  assert.strictEqual(mockIo.calls[0].eventName, 'payment_confirmed');
+  assert.strictEqual(mockIo.calls[0].payload.orderId, 'order-123');
+  assert.strictEqual(mockIo.calls[1].eventName, 'order_paid');
 });
 
 test('emitOrderPaid: payload map đúng field snake_case -> camelCase', () => {
@@ -73,7 +75,7 @@ test('emitOrderPaid: payload map đúng field snake_case -> camelCase', () => {
     tx_signature: 'sig-xyz',
   });
 
-  const { payload } = mockIo.calls[0];
+  const { payload } = mockIo.calls[1];
   assert.strictEqual(payload.orderId, 'order-123');
   assert.strictEqual(payload.reference, 'ref-abc');
   assert.strictEqual(payload.productName, 'Áo thun');
@@ -87,7 +89,7 @@ test('emitOrderPaid: amount phải là Number, không phải string (DB trả DE
 
   emitOrderPaid({ id: '1', reference: 'r', amount: '15.500000', product_name: 'X', tx_signature: 's' });
 
-  const { payload } = mockIo.calls[0];
+  const { payload } = mockIo.calls[1];
   assert.strictEqual(typeof payload.amount, 'number', `amount phải là number, nhận được ${typeof payload.amount}`);
   assert.strictEqual(payload.amount, 15.5);
 });

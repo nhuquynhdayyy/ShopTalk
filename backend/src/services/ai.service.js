@@ -1290,7 +1290,7 @@ const startAgoraAgent = async (channelName, agentUid = 999, language = 'vi', ses
           silence_config: {
             action: 'think',
             content: silenceContent,
-            timeout_ms: 10000
+            timeout_ms: 300000
           }
         },
         idle_timeout: 120,
