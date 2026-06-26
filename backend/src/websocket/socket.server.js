@@ -120,6 +120,17 @@ const isSessionInHandoff = (sessionId) => {
   return liveHandoffSessions.has(sessionId);
 };
 
+const addLiveHandoffSession = (sessionId, reason = 'system') => {
+  const handoff = {
+    sessionId,
+    acceptedBy: 'system',
+    acceptedAt: new Date().toISOString(),
+    reason
+  };
+  liveHandoffSessions.set(sessionId, handoff);
+  return true;
+};
+
 /**
  * Khởi tạo Socket.io Server gắn liền với HTTP Server
  * @param {Object} server - Instance của HTTP server Express
@@ -190,6 +201,7 @@ module.exports = {
   handleAcceptEscalation,
   handleLiveMessage,
   isSessionInHandoff,
+  addLiveHandoffSession,
   __setIoForTest,
   __resetLiveHandoffForTest
 };

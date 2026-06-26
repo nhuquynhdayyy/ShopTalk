@@ -8,7 +8,7 @@ const { checkInventory, normalize } = require('./inventory.service');
 const axios = require('axios');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
-const { getIo, isSessionInHandoff } = require('../websocket/socket.server');
+const { getIo, isSessionInHandoff, addLiveHandoffSession } = require('../websocket/socket.server');
 
 const SYSTEM_PROMPT = `Bạn là trợ lý bán hàng (Sales Agent) AI thông minh của cửa hàng "ShopTalk".
 Nhiệm vụ của bạn là tư vấn dựa trên Phễu bán hàng 6 bước (Sales Funnel Stages), nhưng phải CỰC KỲ LINH HOẠT tùy theo tình huống thực tế:
@@ -223,23 +223,30 @@ const executeTool = async (name, args = {}, sessionId = null) => {
   try {
     switch (name) {
       case 'check_inventory': {
-        const product = checkInventory(args.product_name);
-        if (!product) {
+        const productResult = checkInventory(args.product_name);
+        if (productResult.found) {
           return JSON.stringify({
-            found: false,
-            message: `Không tìm thấy sản phẩm "${args.product_name}" trong kho.`
+            found: true,
+            name: productResult.name,
+            price_usdc: productResult.price_usdc,
+            stock: productResult.stock,
+            message: `Sản phẩm "${productResult.name}" còn ${productResult.stock} chiếc trong kho với giá ${productResult.price_usdc} USDC.`
           });
         }
-        return JSON.stringify({
-          found: true,
-          name: product.name,
-          price_usdc: product.price_usdc,
-          stock: product.stock,
-          message: `Sản phẩm "${product.name}" còn ${product.stock} chiếc trong kho với giá ${product.price_usdc} USDC.`
-        });
+        return JSON.stringify(productResult);
       }
 
       case 'create_order': {
+        const productResult = checkInventory(args.product_name);
+        if (!productResult || productResult.found === false) {
+          return JSON.stringify({
+            success: false,
+            escalate: true,
+            reason: 'inventory_not_found',
+            message: `Không thể tạo đơn hàng vì không tìm thấy sản phẩm "${args.product_name}" trong kho.`
+          });
+        }
+
         const threshold = getOrderEscalationThreshold();
         const orderAmount = Number(args.amount);
 
@@ -317,6 +324,13 @@ const executeTool = async (name, args = {}, sessionId = null) => {
 
       case 'get_reviews': {
         console.log(`[AI Agent] 🔍 Lấy đánh giá cho sản phẩm: "${args.product_name}"`);
+        const productResult = checkInventory(args.product_name);
+        if (!productResult || productResult.found === false) {
+          return JSON.stringify({
+            found: false,
+            message: `Không tìm thấy sản phẩm "${args.product_name}" trong kho để lấy đánh giá.`
+          });
+        }
         const mockReviews = [
           { user: "Quỳnh Như", rating: 5, comment: "Sản phẩm xịn lắm ạ, dùng rất mượt và giao hàng siêu nhanh!" },
           { user: "Hải Nam", rating: 5, comment: "Đáng tiền nha mọi người, dịch vụ chăm sóc khách hàng của shop rất tốt." },
@@ -398,6 +412,11 @@ const emitEscalationEvent = (sessionId, userMessage, reason = 'manual_request') 
       console.log(`[AI Agent] 🚨 Đã bắn sự kiện escalation_request cho sessionId: ${sessionId}`);
     } else {
       console.warn('[AI Agent] ⚠️ Socket.io chưa được khởi tạo, không thể bắn escalation event.');
+    }
+
+    // Tự động chuyển session sang live handoff để AI im lặng từ bây giờ
+    if (typeof addLiveHandoffSession === 'function' && sessionId) {
+      addLiveHandoffSession(sessionId, reason);
     }
   } catch (err) {
     console.error('[AI Agent] ❌ Lỗi khi bắn escalation event:', err.message);
@@ -620,7 +639,7 @@ const chat = async (sessionId, userMessage) => {
         let cleanToolResultStr = toolResult;
         try {
           const parsed = JSON.parse(toolResult);
-          if (name === 'check_inventory' && parsed.found === false) {
+          if (parsed.found === false) {
             toolEscalation = {
               reason: 'inventory_not_found',
               message: parsed.message || `Không tìm thấy sản phẩm "${args.product_name || userMessage}" trong kho.`,

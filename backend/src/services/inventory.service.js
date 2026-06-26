@@ -54,10 +54,15 @@ const normalize = (str) => {
  * @returns {Object|null} Thông tin sản phẩm hoặc null nếu không tìm thấy
  */
 const checkInventory = (productName) => {
-  if (!productName) return null;
+  const notFoundResult = {
+    found: false,
+    message: `Không tìm thấy sản phẩm "${productName || 'này'}" trong kho.`
+  };
+
+  if (!productName) return notFoundResult;
 
   const products = getProducts();
-  if (!products.length) return null;
+  if (!products.length) return notFoundResult;
 
   const searchTerm = normalize(productName.trim());
 
@@ -66,7 +71,9 @@ const checkInventory = (productName) => {
     const pNorm = normalize(p.name);
     return pNorm.includes(searchTerm) || searchTerm.includes(pNorm);
   });
-  if (exactMatch) return exactMatch;
+  if (exactMatch) {
+    return { found: true, ...exactMatch };
+  }
 
   // ─── Bước 2: Fuzzy search bằng Fuse.js (nếu đã cài) ────────────────────────
   if (Fuse) {
@@ -79,7 +86,7 @@ const checkInventory = (productName) => {
 
     const fuse = new Fuse(normalizedProducts, {
       keys: ['_normName', '_normDesc', 'name'],
-      threshold: 0.45,     // 0 = khớp tuyệt đối, 1 = khớp tất cả. 0.45 là cân bằng tốt
+      threshold: 0.4,     // Cân bằng lại threshold để tránh khớp quá mờ
       distance: 100,
       includeScore: true,
       minMatchCharLength: 2
@@ -87,10 +94,22 @@ const checkInventory = (productName) => {
 
     const results = fuse.search(searchTerm);
     if (results.length > 0) {
-      console.log(`[Inventory] 🔍 Fuzzy match: "${productName}" → "${results[0].item.name}" (score: ${results[0].score?.toFixed(3)})`);
-      // Trả về object gốc (không kèm _normName/_normDesc)
-      const { _normName, _normDesc, ...originalProduct } = results[0].item;
-      return originalProduct;
+      const match = results[0];
+      const matchedNameNorm = normalize(match.item.name);
+      
+      // Tách các từ khóa trong search term (lọc từ quá ngắn)
+      const searchWords = searchTerm.split(/\s+/).filter(w => w.length > 1);
+      
+      // Đảm bảo có ít nhất một từ khóa chính khớp với tên sản phẩm
+      const hasWordMatch = searchWords.length === 0 || searchWords.some(word => matchedNameNorm.includes(word));
+
+      if (hasWordMatch && match.score <= 0.4) {
+        console.log(`[Inventory] 🔍 Fuzzy match hợp lệ: "${productName}" → "${match.item.name}" (score: ${match.score?.toFixed(3)})`);
+        const { _normName, _normDesc, ...originalProduct } = match.item;
+        return { found: true, ...originalProduct };
+      } else {
+        console.log(`[Inventory] ⚠️ Fuzzy match bị loại bỏ (không trùng từ khóa hoặc score cao): "${productName}" → "${match.item.name}" (score: ${match.score?.toFixed(3)})`);
+      }
     }
   } else {
     // Fallback: tìm kiếm cơ bản nếu không có fuse.js
@@ -106,10 +125,12 @@ const checkInventory = (productName) => {
       const pNorm = normalize(p.name);
       return pNorm.includes(trimmed) || trimmed.includes(pNorm);
     });
-    if (fallback) return fallback;
+    if (fallback) {
+      return { found: true, ...fallback };
+    }
   }
 
-  return null;
+  return notFoundResult;
 };
 
 module.exports = {
