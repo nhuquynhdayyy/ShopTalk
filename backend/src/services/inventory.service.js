@@ -45,6 +45,27 @@ const normalize = (str) => {
     .replace(/Đ/g, 'd');
 };
 
+const SUMMARY_KEYWORDS = [
+  'tat ca', 'tất cả',
+  'danh sach', 'danh sách',
+  'san pham', 'sản phẩm',
+  'cua hang', 'cửa hàng',
+  'co nhung gi', 'có những gì',
+  'co gi', 'có gì',
+  'dat nhat', 'đắt nhất',
+  're nhat', 'rẻ nhất',
+  'cao nhat', 'cao nhất',
+  'thap nhat', 'thấp nhất',
+  'mac nhat', 'mắc nhất',
+  'gia ca', 'giá cả'
+];
+
+const isSummaryQuery = (text) => {
+  if (!text) return false;
+  const normText = normalize(text);
+  return SUMMARY_KEYWORDS.some(keyword => normText.includes(normalize(keyword)));
+};
+
 /**
  * Kiểm tra tồn kho và tìm kiếm thông minh bằng fuse.js
  * - Không phân biệt hoa/thường
@@ -60,6 +81,22 @@ const checkInventory = (productName) => {
   };
 
   if (!productName) return notFoundResult;
+
+  // Nếu là câu hỏi tổng hợp / so sánh thông tin, trả về toàn bộ danh sách sản phẩm để AI tự so sánh/liệt kê
+  if (isSummaryQuery(productName)) {
+    const products = getProducts();
+    return {
+      found: true,
+      is_summary: true,
+      products: products.map(p => ({
+        name: p.name,
+        price_usdc: p.price_usdc,
+        stock: p.stock,
+        description: p.description
+      })),
+      message: "Đây là danh sách tất cả sản phẩm trong cửa hàng để bạn tự so sánh, tìm giá đắt nhất/rẻ nhất hoặc liệt kê."
+    };
+  }
 
   const products = getProducts();
   if (!products.length) return notFoundResult;

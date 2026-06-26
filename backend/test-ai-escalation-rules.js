@@ -140,6 +140,17 @@ test('Task 4: Chặn AI trả lời khi session đang trong chế độ live han
   __resetLiveHandoffForTest();
 });
 
+test('Task 5: Câu hỏi so sánh/tổng hợp (như đắt nhất) -> check_inventory trả về danh sách sản phẩm và không escalate', async () => {
+  const events = createSocketCapture();
+  const getCallCount = setFetchResponses(makeToolResponse('check_inventory', { product_name: 'sản phẩm đắt nhất' }));
+
+  const result = await chat('session-summary-query-test', 'Sản phẩm nào đắt nhất ở shop thế?');
+
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(result.escalate, false);
+  assert.strictEqual(events.length, 0, 'Không kích hoạt escalation khi truy vấn thông tin so sánh/tổng hợp');
+});
+
 (async () => {
   for (const { name, fn } of tests) {
     try {

@@ -27,6 +27,22 @@ Quy tắc ứng xử quan trọng:
 4. Sau khi tạo đơn hàng thành công, gọi ngay công cụ \`generate_payment_qr\` để lấy ảnh QR Code thanh toán Solana Pay, hiển thị thông tin này cho khách hàng và hướng dẫn họ dùng ví Phantom/Solflare (đã chuyển sang mạng Devnet) quét mã để hoàn tất.
 5. Luôn nhắc nhở khách rằng giao dịch được thanh toán bằng đồng USDC trên mạng Solana Devnet.
 6. Bạn là AI Agent bán hàng chính thức. TUYỆT ĐỐI không được chủ động giới thiệu, đề xuất khách hàng liên hệ nhân viên hỗ trợ hoặc tự ý chuyển giao cuộc nói chuyện sang người thật trừ khi khách hàng trực tiếp yêu cầu từ khóa khiếu nại hoặc trực tiếp đòi gặp người thật. Nếu khách hàng hỏi mua sản phẩm hoặc hỏi các câu thông thường, hãy kiên trì tư vấn và hướng dẫn đặt hàng.
+7. Khi người dùng muốn mua hàng hoặc hỏi tồn kho, bạn phải xác định rõ tên sản phẩm cụ thể từ ngữ cảnh trước đó. Nếu không chắc chắn về tên sản phẩm, hãy hỏi lại khách hàng chứ không được tự ý gọi hàm với các từ khóa chung chung.
+8. Với các câu hỏi mang tính chất so sánh giá (đắt nhất, rẻ nhất, cao nhất, thấp nhất) hoặc yêu cầu xem/liệt kê danh sách sản phẩm tổng hợp: Hãy tự mình phân tích dữ liệu kho hàng dưới đây và trả lời trực tiếp cho khách hàng, tuyệt đối không được gọi tool \`check_inventory\` với các từ khóa chung chung và không được báo là không tìm thấy sản phẩm.
+Danh sách sản phẩm của cửa hàng:
+- Solana Mobile Saga Phone (Saga v1): 0.1 USDC (còn 5 chiếc)
+- Solana Mobile Saga v2: 0.1 USDC (còn 10 chiếc)
+- ShopTalk T-Shirt: 0.1 USDC (còn 25 chiếc)
+- Ốp lưng Saga Phone trong suốt: 8.0 USDC (còn 50 chiếc)
+- Cáp sạc USB-C 1m: 5.0 USDC (còn 100 chiếc)
+- Củ sạc nhanh 65W GaN: 18.0 USDC (còn 30 chiếc)
+- Tai nghe TWS Blockchain Edition: 35.0 USDC (còn 20 chiếc)
+- Mũ lưỡi trai ShopTalk: 12.0 USDC (còn 40 chiếc)
+- Áo hoodie Crypto Dev: 28.0 USDC (còn 15 chiếc)
+- Ledger Nano S Plus: 79.0 USDC (còn 8 chiếc)
+- Sticker Pack Web3: 3.0 USDC (còn 200 chiếc)
+- Balo Laptop Crypto: 45.0 USDC (còn 12 chiếc)
+- Phantom Wallet Keychain: 6.0 USDC (còn 60 chiếc)
 
 LƯU Ý QUAN TRỌNG: 
 - Khi gọi 'create_order', bạn phải tự lấy tên sản phẩm và giá tiền (amount) từ thông tin bạn đã kiểm tra trước đó trong lịch sử trò chuyện.
@@ -61,7 +77,23 @@ CORE RULES:
 1. Always be polite, professional, and concise.
 2. Remind customers that payments are in USDC on the Solana Devnet.
 3. After calling the tool to generate the payment QR code (or when the QR code is displayed), the AI must remain absolutely silent and must not ask any further questions. Let the customer focus on the transaction.
-4. The AI is only allowed to speak again when it receives the order_paid signal (success) or the payment_reminder signal.`;
+4. The AI is only allowed to speak again when it receives the order_paid signal (success) or the payment_reminder signal.
+5. When a user wants to buy or ask about stock, you must identify the specific product name from the prior context. If you are unsure about the product name, ask the customer to clarify instead of calling the function with generic terms.
+6. For comparative queries (most expensive, cheapest, highest, lowest) or general catalog listing requests: do not call \`check_inventory\` with generic terms. Analyze the following store catalog directly and reply to the customer:
+Store Catalog:
+- Solana Mobile Saga Phone (Saga v1): 0.1 USDC (5 in stock)
+- Solana Mobile Saga v2: 0.1 USDC (10 in stock)
+- ShopTalk T-Shirt: 0.1 USDC (25 in stock)
+- Clear Saga Phone Case: 8.0 USDC (50 in stock)
+- USB-C Charging Cable 1m: 5.0 USDC (100 in stock)
+- 65W GaN Fast Charger: 18.0 USDC (30 in stock)
+- TWS Earphones Blockchain Edition: 35.0 USDC (20 in stock)
+- ShopTalk Cap: 12.0 USDC (40 in stock)
+- Crypto Dev Hoodie: 28.0 USDC (15 in stock)
+- Ledger Nano S Plus: 79.0 USDC (8 in stock)
+- Web3 Sticker Pack: 3.0 USDC (200 in stock)
+- Crypto Laptop Backpack: 45.0 USDC (12 in stock)
+- Phantom Wallet Keychain: 6.0 USDC (60 in stock)`;
 
 // ─── State: Lưu trữ lịch sử hội thoại (Context) ──────────────────────────────────
 // Map lưu trữ: sessionId -> Array of messages
@@ -223,17 +255,28 @@ const executeTool = async (name, args = {}, sessionId = null) => {
   try {
     switch (name) {
       case 'check_inventory': {
-        const productResult = checkInventory(args.product_name);
-        if (productResult.found) {
-          return JSON.stringify({
-            found: true,
-            name: productResult.name,
-            price_usdc: productResult.price_usdc,
-            stock: productResult.stock,
-            message: `Sản phẩm "${productResult.name}" còn ${productResult.stock} chiếc trong kho với giá ${productResult.price_usdc} USDC.`
-          });
+        try {
+          if (!args || typeof args.product_name !== 'string' || !args.product_name.trim()) {
+            return 'Sản phẩm không xác định';
+          }
+          const productResult = checkInventory(args.product_name);
+          if (productResult && productResult.found) {
+            if (productResult.is_summary) {
+              return JSON.stringify(productResult);
+            }
+            return JSON.stringify({
+              found: true,
+              name: productResult.name,
+              price_usdc: productResult.price_usdc,
+              stock: productResult.stock,
+              message: `Sản phẩm "${productResult.name}" còn ${productResult.stock} chiếc trong kho với giá ${productResult.price_usdc} USDC.`
+            });
+          }
+          return productResult ? JSON.stringify(productResult) : JSON.stringify({ found: false, message: 'Không tìm thấy sản phẩm trong kho.' });
+        } catch (err) {
+          console.error('[AI Agent] Lỗi check_inventory tool:', err.message);
+          return 'Sản phẩm không xác định';
         }
-        return JSON.stringify(productResult);
       }
 
       case 'create_order': {
