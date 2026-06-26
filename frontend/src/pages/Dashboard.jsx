@@ -110,6 +110,10 @@ function Dashboard() {
   const [isFetching, setIsFetching] = useState(false);
   const [paidAlert, setPaidAlert] = useState(null);
   const [escalations, setEscalations] = useState([]);
+  const [activeChatSessionId, setActiveChatSessionId] = useState(null);
+  const [chatMessagesBySession, setChatMessagesBySession] = useState(new Map());
+  const [chatInputText, setChatInputText] = useState('');
+  const chatScrollRef = useRef(null);
   const ordersRef = useRef(orders);
 
   useEffect(() => {
@@ -205,11 +209,42 @@ function Dashboard() {
     ]);
   }, []);
 
+  const handleLiveMessage = useCallback((payload = {}) => {
+    console.log('[Dashboard] Nhận tin nhắn live chat từ khách:', payload);
+    const sessionId = payload.sessionId;
+    if (!sessionId) return;
+
+    setChatMessagesBySession((current) => {
+      const currentMsgs = current.get(sessionId) || [];
+      if (payload.id && currentMsgs.some(m => m.id === payload.id)) return current;
+      
+      const newMsg = {
+        id: payload.id || `live-${Date.now()}`,
+        role: payload.sender === 'user' ? 'user' : 'assistant',
+        content: payload.message,
+        timestamp: payload.timestamp || new Date().toISOString()
+      };
+      
+      const nextMap = new Map(current);
+      nextMap.set(sessionId, [...currentMsgs, newMsg]);
+      return nextMap;
+    });
+  }, []);
+
   const socketState = useWebSocket({
     order_status_updated: handleOrderStatusUpdated,
     order_paid: handleOrderPaid,
-    escalation_request: handleEscalationRequest
+    escalation_request: handleEscalationRequest,
+    live_message: handleLiveMessage
   });
+
+  const socket = socketState.socket;
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessagesBySession, activeChatSessionId]);
 
   const totals = useMemo(() => {
     const paidOrders = orders.filter((order) => order.status === 'paid');
@@ -237,10 +272,79 @@ function Dashboard() {
     )));
   };
 
-  const handleAcceptEscalation = (id) => {
+  const handleAcceptEscalation = async (id) => {
     setEscalations((current) => current.map((item) => (
       item.id === id ? { ...item, accepted: true } : item
     )));
+
+    const escalation = escalations.find(item => item.id === id);
+    if (!escalation) return;
+
+    const targetSessionId = escalation.sessionId;
+
+    if (socket) {
+      console.log('[Socket] Gửi accept_escalation cho session:', targetSessionId);
+      socket.emit('accept_escalation', {
+        sessionId: targetSessionId,
+        staffName: 'Chủ shop'
+      });
+    }
+
+    try {
+      const response = await api.getChatHistory(targetSessionId);
+      if (response && response.success && Array.isArray(response.history)) {
+        const mappedHistory = response.history.map((msg, index) => ({
+          id: `hist-${index}`,
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date().toISOString()
+        }));
+
+        setChatMessagesBySession((current) => {
+          const nextMap = new Map(current);
+          nextMap.set(targetSessionId, mappedHistory);
+          return nextMap;
+        });
+      }
+    } catch (err) {
+      console.error('[Dashboard] Không thể lấy lịch sử chat:', err.message);
+    }
+
+    setActiveChatSessionId(targetSessionId);
+  };
+
+  const handleSendChatMessage = (e) => {
+    e?.preventDefault();
+    const text = chatInputText.trim();
+    if (!text || !activeChatSessionId) return;
+
+    const messageId = `staff-${Date.now()}`;
+    const newMsg = {
+      id: messageId,
+      role: 'assistant',
+      sender: 'staff',
+      content: text,
+      timestamp: new Date().toISOString()
+    };
+
+    setChatMessagesBySession((current) => {
+      const currentMsgs = current.get(activeChatSessionId) || [];
+      const nextMap = new Map(current);
+      nextMap.set(activeChatSessionId, [...currentMsgs, newMsg]);
+      return nextMap;
+    });
+
+    setChatInputText('');
+
+    if (socket) {
+      socket.emit('agent_message', {
+        sessionId: activeChatSessionId,
+        message: text,
+        sender: 'staff',
+        id: messageId,
+        timestamp: new Date().toISOString()
+      });
+    }
   };
 
   return (
@@ -386,6 +490,64 @@ function Dashboard() {
         onClose={() => setIsOffRampOpen(false)}
         onComplete={handleCompleteOffRamp}
       />
+
+      {/* Floating Chat Box cho Chủ shop */}
+      {activeChatSessionId && (
+        <div className="fixed bottom-6 right-6 z-50 flex h-96 w-80 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
+          <header className="flex items-center justify-between border-b border-slate-100 bg-slate-900 px-4 py-3 text-white">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-semibold">Live Chat: Client {activeChatSessionId.slice(0, 8)}...</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveChatSessionId(null)}
+              className="text-slate-400 transition hover:text-white text-xs font-bold"
+            >
+              Đóng
+            </button>
+          </header>
+
+          <div className="flex-1 space-y-3 overflow-y-auto p-4 bg-slate-50">
+            {(chatMessagesBySession.get(activeChatSessionId) || []).map((msg) => {
+              const isUser = msg.role === 'user';
+              return (
+                <div key={msg.id} className={`flex ${isUser ? 'justify-start' : 'justify-end'}`}>
+                  <div
+                    className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-5 shadow-sm ${
+                      isUser
+                        ? 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
+                        : 'rounded-br-sm bg-teal-600 text-white'
+                    }`}
+                  >
+                    <p className="font-semibold text-[10px] text-slate-400 mb-0.5">
+                      {isUser ? 'Khách hàng' : 'Bạn (Chủ shop)'}
+                    </p>
+                    <span className="whitespace-pre-line">{msg.content}</span>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={chatScrollRef} />
+          </div>
+
+          <form onSubmit={handleSendChatMessage} className="flex border-t border-slate-100 p-2.5 gap-2 bg-white">
+            <input
+              value={chatInputText}
+              onChange={(e) => setChatInputText(e.target.value)}
+              placeholder="Nhập câu trả lời..."
+              className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-950 outline-none transition focus:border-teal-500"
+            />
+            <button
+              type="submit"
+              disabled={!chatInputText.trim()}
+              className="rounded bg-teal-600 px-3 text-xs font-semibold text-white transition hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400"
+            >
+              Gửi
+            </button>
+          </form>
+        </div>
+      )}
     </>
   );
 }

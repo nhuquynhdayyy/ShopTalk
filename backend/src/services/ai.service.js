@@ -1251,6 +1251,11 @@ const triggerAgentSpeak = async (sessionId, text) => {
   }
 };
 
+const getSessionHistory = (sessionId) => {
+  if (!chatSessions.has(sessionId)) return [];
+  return chatSessions.get(sessionId);
+};
+
 module.exports = {
   groq,
   chat,
@@ -1262,5 +1267,6 @@ module.exports = {
   executeTool,
   orderSessions,
   activeAgoraAgents,
-  triggerAgentSpeak
+  triggerAgentSpeak,
+  getSessionHistory
 };
