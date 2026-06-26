@@ -27,6 +27,10 @@ module.exports = {
           type: "string",
           description: "Họ và tên của khách hàng nhận đơn hàng."
         },
+        customer_phone: {
+          type: "string",
+          description: "Số điện thoại liên hệ của khách hàng nhận đơn hàng."
+        },
         customer_address: {
           type: "string",
           description: "Địa chỉ giao nhận hàng của khách hàng."
@@ -46,7 +50,7 @@ module.exports = {
           description: "Danh sách chi tiết các sản phẩm được mua trong đơn."
         }
       },
-      required: ["product_name", "amount", "seller_wallet", "customer_name", "customer_address"]
+      required: ["product_name", "amount", "seller_wallet", "customer_name", "customer_phone", "customer_address"]
     }
   }
 };

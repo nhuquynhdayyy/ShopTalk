@@ -11,6 +11,7 @@
 
 const { getPendingOrders, updateOrderStatus } = require('../models/order.model');
 const { verifyPayment } = require('../services/verify.service');
+const { emitOrderPaid } = require('../websocket/socket.server');
 
 // ─── Cấu hình ───────────────────────────────────────────────────────────────
 
@@ -64,8 +65,32 @@ const runOnePoll = async () => {
 
         if (result.success) {
           // ✅ Thanh toán thành công — cập nhật DB ngay lập tức
-          await updateOrderStatus(order.id, 'paid', result.signature);
-          logSuccess(order.id, result.signature);
+          const updatedOrder = await updateOrderStatus(order.id, 'paid', result.signature);
+          if (updatedOrder) {
+            emitOrderPaid(updatedOrder);
+            logSuccess(order.id, result.signature);
+
+            // Trigger AI Agent to speak congratulations and emit transcript to UI
+            try {
+              const { orderSessions, triggerAgentSpeak } = require('../services/ai.service');
+              const sessionId = orderSessions.get(updatedOrder.id);
+              if (sessionId) {
+                const congratulationText = 'Tuyệt vời! Mình đã nhận được thanh toán. Đơn hàng của bạn đang được xử lý ngay đây.';
+                await triggerAgentSpeak(sessionId, congratulationText);
+
+                const { emitTranscriptReceived } = require('../websocket/socket.server');
+                emitTranscriptReceived({
+                  sessionId,
+                  sender: 'assistant',
+                  transcript: congratulationText,
+                  type: 'voice',
+                  id: 'ai-congratulation-' + Date.now()
+                });
+              }
+            } catch (err) {
+              console.error('[PaymentWatcher] Lỗi khi trigger AI nói chúc mừng:', err.message);
+            }
+          }
         } else if (result.error === 'PAYMENT_MISMATCH') {
           await updateOrderStatus(order.id, 'payment_mismatch', result.signature || null);
           console.warn(

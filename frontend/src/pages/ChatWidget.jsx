@@ -1,8 +1,10 @@
-import AgoraRTC from 'agora-rtc-sdk-ng';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import api from '../api';
+import PaidBadge from '../components/PaidBadge';
 import QRModal from '../components/QRModal';
+import TranscriptBubble from '../components/TranscriptBubble';
+import VoiceCallUI from '../components/VoiceCallUI';
 import { useAgoraVoice } from '../hooks/useAgoraVoice';
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -10,7 +12,7 @@ const mockMessages = [
   {
     id: 'mock-welcome',
     role: 'assistant',
-    content: 'Xin chào, mình là ShopTalk. Bạn có thể hỏi sản phẩm, so sánh lựa chọn hoặc nhắn "mua" để mình tạo mã thanh toán USDC.'
+    content: 'Dạ, ShopTalk xin chào anh/chị! Em là nhân viên tư vấn ảo của cửa hàng. Anh chị đang quan tâm đến mẫu điện thoại Solana Saga hay phụ kiện nào bên em ạ?'
   }
 ];
 
@@ -189,7 +191,10 @@ const parseMessageContent = (content, onShowQr) => {
                   id: orderId,
                   product_name: productName,
                   amount: orderAmount,
-                  seller_wallet: sellerWallet
+                  seller_wallet: sellerWallet,
+                  customer_name: args.customer_name,
+                  customer_phone: args.customer_phone,
+                  customer_address: args.customer_address
                 })}
                 className="h-8 rounded bg-teal-600 px-3 text-xs font-semibold text-white transition hover:bg-teal-700"
               >
@@ -238,6 +243,11 @@ const parseMessageContent = (content, onShowQr) => {
 
 function ChatBubble({ message, onShowQr }) {
   const isUser = message.role === 'user';
+  const isStaff = message.sender === 'staff';
+
+  if (message.type === 'voice') {
+    return <TranscriptBubble message={message} />;
+  }
 
   return (
     <motion.div
@@ -245,14 +255,20 @@ function ChatBubble({ message, onShowQr }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.18 }}
-      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+      className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
     >
+      {isStaff && (
+        <span className="text-[10px] font-semibold text-amber-700 mb-1 ml-1">
+          👤 Nhân viên hỗ trợ
+        </span>
+      )}
       <div
-        className={`max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm ${
-          isUser
+        className={`max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm ${isUser
             ? 'rounded-br-sm bg-teal-600 text-white'
-            : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
-        }`}
+            : isStaff
+              ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-950'
+              : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
+          }`}
       >
         {isUser ? message.content : parseMessageContent(message.content, onShowQr)}
       </div>
@@ -288,34 +304,145 @@ function ChatWidget() {
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [isEscalated, setIsEscalated] = useState(false);
-  
+  const [isStaffConnected, setIsStaffConnected] = useState(false);
+
   const [language, setLanguage] = useState('vi');
 
   const [isMockMode, setIsMockMode] = useState(false);
   const [qrPayload, setQrPayload] = useState(null);
+  const [paidReceipt, setPaidReceipt] = useState(null);
   const chatEndRef = useRef(null);
-  const rtcClientRef = useRef(null);
-  const localAudioTrackRef = useRef(null);
 
   // ── Voice call via Agora ──────────────────────────────────────────────────
   const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute } = useAgoraVoice(sessionId);
 
   const handleVoiceOrderCreated = useCallback((data) => {
     console.log('[Socket.io] Nhận sự kiện voice_order_created:', data);
+    setPaidReceipt(null);
     setQrPayload({
       qrCodeImage: data.qrCodeImage,
       order: {
         id: data.orderId,
         product_name: data.productName,
         amount: data.amount,
-        seller_wallet: data.sellerWallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ'
+        seller_wallet: data.sellerWallet || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
+        customer_name: data.customerName,
+        customer_phone: data.customerPhone,
+        customer_address: data.customerAddress
       }
     });
   }, []);
 
-  useWebSocket({
-    voice_order_created: handleVoiceOrderCreated
+  const normalizePaidOrder = useCallback((payload = {}) => {
+    const order = payload.order || payload.data || payload;
+
+    return {
+      ...order,
+      id: order.id || order.orderId || payload.orderId || qrPayload?.order?.id,
+      product_name: order.product_name || order.productName || qrPayload?.order?.product_name || 'Don hang ShopTalk',
+      amount: order.amount || qrPayload?.order?.amount || 0,
+      seller_wallet: order.seller_wallet || order.sellerWallet || qrPayload?.order?.seller_wallet,
+      status: 'paid'
+    };
+  }, [qrPayload]);
+
+  const handleTranscriptReceived = useCallback((payload = {}) => {
+    const transcriptSessionId = payload.session_id || payload.sessionId;
+    if (transcriptSessionId && sessionId && transcriptSessionId !== sessionId) return;
+
+    const content = payload.transcript || payload.content || payload.text || payload.message;
+    if (!content) return;
+
+    const sender = payload.sender || payload.role || 'user';
+    const messageId = payload.id || payload.messageId || generateId();
+
+    setMessages((current) => {
+      const existingIndex = current.findIndex((m) => m.id === messageId);
+      if (existingIndex > -1) {
+        const updated = [...current];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          content,
+          timestamp: payload.timestamp || updated[existingIndex].timestamp
+        };
+        return updated;
+      } else {
+        return [
+          ...current,
+          {
+            id: messageId,
+            role: sender === 'user' ? 'user' : 'assistant',
+            sender,
+            type: 'voice',
+            content,
+            audio_url: payload.audio_url || payload.audioUrl || null,
+            timestamp: payload.timestamp || new Date().toISOString()
+          }
+        ];
+      }
+    });
+  }, [sessionId]);
+
+  const handleOrderPaid = useCallback((payload = {}) => {
+    const paidOrder = normalizePaidOrder(payload);
+    const currentQrOrderId = qrPayload?.order?.id;
+
+    if (!paidOrder.id || !currentQrOrderId || paidOrder.id === currentQrOrderId) {
+      setQrPayload(null);
+    }
+
+    setPaidReceipt(paidOrder);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `paid-${paidOrder.id || Date.now()}`,
+        role: 'assistant',
+        content: `${paidOrder.product_name || 'Don hang ShopTalk'} da thanh toan thanh cong${paidOrder.amount ? ` ${Number(paidOrder.amount).toFixed(2)} USDC` : ''}.`
+      }
+    ]);
+  }, [normalizePaidOrder, qrPayload]);
+
+  const handleStaffJoined = useCallback((payload = {}) => {
+    console.log('[Socket] Nhân viên đã tham gia phòng:', payload);
+    setIsStaffConnected(true);
+  }, []);
+
+  const handleAgentMessage = useCallback((payload = {}) => {
+    console.log('[Socket] Nhận tin nhắn từ nhân viên:', payload);
+    setIsStaffConnected(true); // Đảm bảo ẩn thông báo chờ ngay khi có tin nhắn từ agent_message
+    const messageId = payload.id || generateId();
+    setMessages((current) => {
+      if (current.some(m => m.id === messageId)) return current;
+      return [
+        ...current,
+        {
+          id: messageId,
+          role: 'assistant',
+          sender: 'staff',
+          content: payload.message,
+          timestamp: payload.timestamp || new Date().toISOString()
+        }
+      ];
+    });
+  }, []);
+
+  const socketState = useWebSocket({
+    voice_order_created: handleVoiceOrderCreated,
+    transcript_received: handleTranscriptReceived,
+    order_paid: handleOrderPaid,
+    staff_joined: handleStaffJoined,
+    agent_message: handleAgentMessage
   });
+
+  const socket = socketState.socket;
+
+  // Emit join_session để socket client join vào room của sessionId
+  useEffect(() => {
+    if (sessionId && socket) {
+      console.log('[Socket] Gửi join_session cho sessionId:', sessionId);
+      socket.emit('join_session', { sessionId, role: 'client' });
+    }
+  }, [sessionId, socket]);
 
   useEffect(() => {
     let savedSessionId = sessionStorage.getItem('shoptalk_session_id');
@@ -330,7 +457,7 @@ function ChatWidget() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, isTyping, isEscalated]);
+  }, [messages, isTyping, isEscalated, paidReceipt]);
 
   const subtitle = useMemo(() => (
     isEscalated ? 'Đã chuyển sang nhân viên' : 'AI Sales Agent đang sẵn sàng'
@@ -360,7 +487,28 @@ function ChatWidget() {
     event?.preventDefault();
 
     const text = inputValue.trim();
-    if (!text || isTyping || isEscalated) return;
+    if (!text || isTyping) return;
+    if (isEscalated && !isStaffConnected) return;
+
+    if (isEscalated && isStaffConnected) {
+      setInputValue('');
+      const messageId = generateId();
+      setMessages((current) => [
+        ...current,
+        { id: messageId, role: 'user', content: text }
+      ]);
+      
+      if (socket) {
+        socket.emit('live_message', {
+          sessionId,
+          message: text,
+          sender: 'user',
+          id: messageId,
+          timestamp: new Date().toISOString()
+        });
+      }
+      return;
+    }
 
     setInputValue('');
     setMessages((current) => [
@@ -405,6 +553,7 @@ function ChatWidget() {
 
       if (response.qrCodeImage) {
         const order = await resolveOrderSummary(response.orderId);
+        setPaidReceipt(null);
         setQrPayload({ qrCodeImage: response.qrCodeImage, order });
       }
     } finally {
@@ -423,7 +572,9 @@ function ChatWidget() {
     setSessionId(nextSessionId);
     setMessages(mockMessages);
     setIsEscalated(false);
+    setIsStaffConnected(false);
     setQrPayload(null);
+    setPaidReceipt(null);
     setInputValue('');
   };
 
@@ -448,8 +599,8 @@ function ChatWidget() {
                   Mock data
                 </span>
               )}
-              <select 
-                value={language} 
+              <select
+                value={language}
                 onChange={(e) => setLanguage(e.target.value)}
                 disabled={isInCall || connectionState === 'CONNECTING'}
                 className="bg-white text-xs text-slate-700 border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-teal-500"
@@ -468,6 +619,21 @@ function ChatWidget() {
           </div>
         </header>
 
+        <AnimatePresence>
+          {(isInCall || connectionState === 'CONNECTING') && (
+            <VoiceCallUI
+              status={connectionState}
+              isInCall={isInCall}
+              isMuted={isMuted}
+              sessionId={sessionId}
+              language={language}
+              onStartCall={joinChannel}
+              onEndCall={leaveChannel}
+              onToggleMute={toggleMute}
+            />
+          )}
+        </AnimatePresence>
+
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <AnimatePresence initial={false}>
             {messages.map((message) => (
@@ -477,15 +643,31 @@ function ChatWidget() {
                 onShowQr={(qrCodeImage, order) => setQrPayload({ qrCodeImage, order })}
               />
             ))}
+            {paidReceipt && <PaidBadge key={`receipt-${paidReceipt.id || 'latest'}`} order={paidReceipt} />}
           </AnimatePresence>
 
           {isTyping && <TypingIndicator />}
-          {isEscalated && <StaffHandoff />}
+          {isEscalated && !isStaffConnected && <StaffHandoff />}
           <div ref={chatEndRef} />
         </div>
 
-        {!isEscalated && (
+        {(!isEscalated || isStaffConnected) && (
           <div className="border-t border-slate-200 bg-white p-4">
+            {qrPayload && (
+              <div className="mb-3 flex items-center justify-between rounded-lg bg-teal-50 border border-teal-100 px-4 py-2.5 text-teal-800 text-xs font-medium animate-pulse">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-teal-500 animate-ping" />
+                  <span>AI đang đợi bạn thanh toán đơn hàng "{qrPayload.order?.product_name || 'Sản phẩm'}"...</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQrPayload(null)}
+                  className="text-teal-600 hover:text-teal-800 font-semibold transition"
+                >
+                  Đóng QR
+                </button>
+              </div>
+            )}
             <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
               {suggestedPrompts.map((prompt) => (
                 <button
@@ -518,10 +700,10 @@ function ChatWidget() {
                   connectionState === 'CONNECTING'
                     ? 'cursor-not-allowed bg-slate-200 text-slate-400 animate-pulse'
                     : isInCall && !isMuted
-                    ? 'bg-red-500 text-white shadow-lg shadow-red-200 hover:bg-red-600'
-                    : isInCall && isMuted
-                    ? 'bg-amber-400 text-white hover:bg-amber-500'
-                    : 'border border-slate-200 bg-white text-slate-600 hover:border-teal-400 hover:text-teal-600'
+                      ? 'bg-red-500 text-white shadow-lg shadow-red-200 hover:bg-red-600'
+                      : isInCall && isMuted
+                        ? 'bg-amber-400 text-white hover:bg-amber-500'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:border-teal-400 hover:text-teal-600'
                 ].join(' ')}
               >
                 {connectionState === 'CONNECTING' ? '⏳' : isInCall ? (isMuted ? '🔇' : '🎙️') : '📞'}

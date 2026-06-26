@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { product_name, amount, seller_wallet } = req.body;
+    const { product_name, amount, seller_wallet, customer_name, customer_phone, customer_address } = req.body;
 
     // Kiểm tra dữ liệu đầu vào bắt buộc
     if (!product_name || amount === undefined || amount === null || !seller_wallet) {
@@ -52,7 +52,10 @@ router.post('/', async (req, res) => {
       product_name,
       amount,
       seller_wallet,
-      status: 'pending'
+      status: 'pending',
+      customer_name,
+      customer_phone,
+      customer_address
     });
 
     return res.status(201).json({

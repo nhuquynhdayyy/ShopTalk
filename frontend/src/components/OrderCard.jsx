@@ -63,6 +63,24 @@ function OrderCard({ order, onOfframp }) {
               <span className="font-semibold text-slate-700">Ví nhận:</span>{' '}
               <span className="font-mono">{shorten(order.seller_wallet, 8, 8)}</span>
             </div>
+            {order.customer_name && (
+              <div>
+                <span className="font-semibold text-slate-700">Người nhận:</span>{' '}
+                <span>{order.customer_name}</span>
+              </div>
+            )}
+            {order.customer_phone && (
+              <div>
+                <span className="font-semibold text-slate-700">Điện thoại:</span>{' '}
+                <span>{order.customer_phone}</span>
+              </div>
+            )}
+            {order.customer_address && (
+              <div className="md:col-span-2">
+                <span className="font-semibold text-slate-700">Địa chỉ giao:</span>{' '}
+                <span>{order.customer_address}</span>
+              </div>
+            )}
             {order.tx_signature && (
               <div className="md:col-span-2">
                 <span className="font-semibold text-slate-700">Tx:</span>{' '}

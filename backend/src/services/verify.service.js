@@ -1,5 +1,6 @@
 const BigNumber = require('bignumber.js');
 const { USDC_DEVNET_MINT } = require('../config/solana');
+const { getOrderByTxSignature } = require('../models/order.model');
 
 const USDC_DECIMALS = 6;
 const DEVNET_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
@@ -168,6 +169,13 @@ const verifyPayment = async (orderOrReference, expectedAmount, expectedRecipient
 
       const confirmationStatus = signatureInfo.confirmationStatus || 'finalized';
       if (confirmationStatus !== 'finalized') {
+        continue;
+      }
+
+      // Kiểm tra xem signature này đã được sử dụng cho đơn hàng khác trong DB chưa
+      const existingOrder = await getOrderByTxSignature(signatureInfo.signature);
+      if (existingOrder && existingOrder.id !== orderId) {
+        console.warn(`[Verify] Bỏ qua signature ${signatureInfo.signature} đã thuộc đơn #${existingOrder.id}`);
         continue;
       }
 

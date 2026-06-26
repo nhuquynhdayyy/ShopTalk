@@ -62,6 +62,10 @@ const sendChatMessage = (message, sessionId = null) => (
   tryEndpoints('post', ['/api/ai/chat', '/chat'], { message, sessionId })
 );
 
+const getChatHistory = (sessionId) => (
+  tryEndpoints('get', [`/api/ai/history/${sessionId}`, `/ai/history/${sessionId}`])
+);
+
 const getOrders = () => (
   tryEndpoints('get', ['/api/orders', '/orders'])
 );
@@ -73,6 +77,7 @@ const getOrderById = (orderId) => (
 export default {
   http,
   sendChatMessage,
+  getChatHistory,
   getOrders,
   getAgoraToken,
   startAgoraAgent,

@@ -25,6 +25,9 @@ async function runTest() {
     product_name: 'Khóa học Solana Developer nâng cao',
     amount: 150.50, // 150.50 USDC
     seller_wallet: 'Bv3n1H1XU2Rz2k2eK1tqJj6Tuxy9rSwP8gM99fKkZpQy',
+    customer_name: 'Nguyễn Như Quỳnh',
+    customer_phone: '0987654321',
+    customer_address: 'Đà Nẵng'
   };
 
   try {

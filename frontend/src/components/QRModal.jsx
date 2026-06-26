@@ -86,6 +86,24 @@ function QRModal({ isOpen, onClose, qrCodeImage, order }) {
                 <dt className="text-slate-500">Mã đơn</dt>
                 <dd className="font-mono text-xs text-slate-700">{shorten(order?.id)}</dd>
               </div>
+              {order?.customer_name && (
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-slate-500">Khách hàng</dt>
+                  <dd className="text-right font-semibold text-slate-950">{order.customer_name}</dd>
+                </div>
+              )}
+              {order?.customer_phone && (
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-slate-500">Số điện thoại</dt>
+                  <dd className="text-right font-semibold text-slate-950">{order.customer_phone}</dd>
+                </div>
+              )}
+              {order?.customer_address && (
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-slate-500">Địa chỉ</dt>
+                  <dd className="text-right font-semibold text-slate-950">{order.customer_address}</dd>
+                </div>
+              )}
             </dl>
 
             <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3">

@@ -13,7 +13,7 @@ module.exports = {
       properties: {
         product_name: {
           type: "string",
-          description: "Tên sản phẩm khách hàng đang quan tâm."
+          description: "Tên chính xác của sản phẩm cần kiểm tra. Không được truyền các từ chung chung như tất cả, danh sách, v.v."
         }
       },
       required: ["product_name"]

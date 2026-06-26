@@ -16,12 +16,12 @@ const db = require('../config/db');
  * @returns {Promise<Object>} Đơn hàng vừa tạo
  */
 const createOrder = async (orderData) => {
-  const { reference, product_name, amount, seller_wallet, status, expires_at, customer_name, customer_address, items_list } = orderData;
+  const { reference, product_name, amount, seller_wallet, status, expires_at, customer_name, customer_phone, customer_address, items_list } = orderData;
   
   // Sử dụng COALESCE trong PostgreSQL để tự động điền các giá trị mặc định nếu tham số truyền vào là null/undefined
   const queryText = `
-    INSERT INTO orders (reference, product_name, amount, seller_wallet, status, expires_at, customer_name, customer_address, items_list)
-    VALUES ($1, $2, $3, $4, COALESCE($5, 'pending'), COALESCE($6, CURRENT_TIMESTAMP + INTERVAL '15 minutes'), $7, $8, $9)
+    INSERT INTO orders (reference, product_name, amount, seller_wallet, status, expires_at, customer_name, customer_phone, customer_address, items_list)
+    VALUES ($1, $2, $3, $4, COALESCE($5, 'pending'), COALESCE($6, CURRENT_TIMESTAMP + INTERVAL '15 minutes'), $7, $8, $9, $10)
     RETURNING *;
   `;
   
@@ -33,6 +33,7 @@ const createOrder = async (orderData) => {
     status || null,
     expires_at || null,
     customer_name || null,
+    customer_phone || null,
     customer_address || null,
     items_list ? (typeof items_list === 'string' ? items_list : JSON.stringify(items_list)) : null
   ];
@@ -109,7 +110,7 @@ const getOrderByTxSignature = async (txSignature) => {
 const updateOrderStatus = async (id, status, txSignature = null) => {
   if (txSignature) {
     const existingOrder = await getOrderByTxSignature(txSignature);
-    if (existingOrder) {
+    if (existingOrder && existingOrder.id !== id) {
       console.warn(`[Order] Bỏ qua cập nhật trùng tx_signature ${txSignature} cho đơn #${id}. Signature đã thuộc đơn #${existingOrder.id}`);
       return null;
     }
@@ -213,6 +214,54 @@ const getExpiredPendingOrders = async () => {
   }
 };
 
+/**
+ * Láº¥y cÃ¡c Ä‘Æ¡n pending Ä‘Ã£ chá» tá»‘i thiá»ƒu N phÃºt vÃ  chÆ°a gá»­i nháº¯c thanh toÃ¡n.
+ * @param {number} minutesWaiting - Sá»‘ phÃºt chá» trÆ°á»›c khi nháº¯c thanh toÃ¡n
+ * @returns {Promise<Array>} Danh sÃ¡ch Ä‘Æ¡n cáº§n nháº¯c thanh toÃ¡n
+ */
+const getPaymentReminderCandidates = async (minutesWaiting = 5) => {
+  const queryText = `
+    SELECT * FROM orders
+    WHERE status = 'pending'
+      AND payment_reminded_at IS NULL
+      AND created_at <= NOW() - ($1::int * INTERVAL '1 minute')
+      AND expires_at > NOW()
+    ORDER BY created_at ASC;
+  `;
+
+  try {
+    const res = await db.query(queryText, [minutesWaiting]);
+    return res.rows;
+  } catch (error) {
+    console.error('Lá»—i trong getPaymentReminderCandidates:', error.message);
+    throw error;
+  }
+};
+
+/**
+ * ÄÃ¡nh dáº¥u Ä‘Æ¡n hÃ ng Ä‘Ã£ gá»­i nháº¯c thanh toÃ¡n.
+ * @param {string} id - UUID cá»§a Ä‘Æ¡n hÃ ng
+ * @returns {Promise<Object|null>} ÄÆ¡n hÃ ng Ä‘Ã£ cáº­p nháº­t hoáº·c null
+ */
+const markPaymentReminderSent = async (id) => {
+  const queryText = `
+    UPDATE orders
+    SET payment_reminded_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+      AND status = 'pending'
+      AND payment_reminded_at IS NULL
+    RETURNING *;
+  `;
+
+  try {
+    const res = await db.query(queryText, [id]);
+    return res.rows[0] || null;
+  } catch (error) {
+    console.error(`Lá»—i trong markPaymentReminderSent vá»›i ID ${id}:`, error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   createOrder,
   getOrderById,
@@ -222,6 +271,8 @@ module.exports = {
   getAllOrders,
   getPendingOrders,
   getExpiredPendingOrders,
+  getPaymentReminderCandidates,
+  markPaymentReminderSent,
 };
 
 
