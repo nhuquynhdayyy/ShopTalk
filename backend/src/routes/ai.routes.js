@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { chat, generateAgoraToken, startAgoraAgent } = require('../services/ai.service');
+const { chat, generateAgoraToken, startAgoraAgent, getSessionHistory } = require('../services/ai.service');
 
 /**
  * Route: POST /chat
@@ -46,6 +46,29 @@ router.post('/chat', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Lỗi hệ thống khi xử lý hội thoại với AI Sales Agent'
+    });
+  }
+});
+
+/**
+ * Route: GET /history/:sessionId
+ * Mô tả: Lấy lịch sử chat của một session (lọc bỏ system messages).
+ */
+router.get('/history/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const history = getSessionHistory(sessionId);
+    // Lọc bớt system prompt đi để client hiển thị sạch đẹp
+    const cleanHistory = history.filter(msg => msg.role !== 'system');
+    return res.status(200).json({
+      success: true,
+      history: cleanHistory
+    });
+  } catch (error) {
+    console.error('Lỗi trong GET /history/:sessionId:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Lỗi hệ thống khi lấy lịch sử chat'
     });
   }
 });

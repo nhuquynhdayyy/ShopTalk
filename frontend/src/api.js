@@ -62,6 +62,10 @@ const sendChatMessage = (message, sessionId = null, language = 'vi') => (
   tryEndpoints('post', ['/api/ai/chat', '/chat'], { message, sessionId, language })
 );
 
+const getChatHistory = (sessionId) => (
+  tryEndpoints('get', [`/api/ai/history/${sessionId}`, `/ai/history/${sessionId}`])
+);
+
 const getOrders = () => (
   tryEndpoints('get', ['/api/orders', '/orders'])
 );
@@ -70,12 +74,27 @@ const getOrderById = (orderId) => (
   tryEndpoints('get', [`/api/orders/${orderId}`, `/orders/${orderId}`])
 );
 
+const withdrawOrder = async (orderId) => {
+  try {
+    const response = await http.patch(`/orders/${orderId}/withdraw`);
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      const response = await http.patch(`/api/orders/${orderId}/withdraw`);
+      return response.data;
+    }
+    throw error;
+  }
+};
+
 export default {
   http,
   sendChatMessage,
+  getChatHistory,
   getOrders,
   getAgoraToken,
   startAgoraAgent,
   getOrderById,
+  withdrawOrder,
   API_BASE_URL
 };

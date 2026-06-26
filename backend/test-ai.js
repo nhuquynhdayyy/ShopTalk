@@ -10,7 +10,7 @@ function postChat(message, sessionId = null) {
     const options = {
       hostname: 'localhost',
       port: PORT,
-      path: '/chat',
+      path: '/api/ai/chat',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -53,14 +53,14 @@ async function runTests() {
     sessionId = res.sessionId;
 
     // 2. Hỏi sản phẩm tồn kho (Sử dụng check_inventory tool / mock)
-    console.log('Bước 2: Hỏi thăm tồn kho điện thoại Saga...');
-    res = await postChat("Bên mình còn điện thoại Saga v2 không ạ?", sessionId);
+    console.log('Bước 2: Hỏi thăm tồn kho áo thun basic...');
+    res = await postChat("Bên mình còn áo thun basic không ạ?", sessionId);
     console.log('AI phản hồi:\n', res.reply);
     console.log('--------------------------------------------------\n');
 
     // 3. Đặt mua hàng (Sử dụng create_order + generate_payment_qr tool / mock)
     console.log('Bước 3: Gửi yêu cầu mua hàng...');
-    res = await postChat("Mình muốn mua 1 cái điện thoại Solana Saga v2 nhé.", sessionId);
+    res = await postChat("Mình muốn mua 1 cái áo thun basic nhé. Em tên là Nguyễn Văn A, sđt 0987654321, địa chỉ ở Hà Nội.", sessionId);
     console.log('AI phản hồi:\n', res.reply);
     if (res.qrCodeImage) {
       console.log('✅ Đã nhận được mã QR Code hình ảnh (Base64) thành công!');

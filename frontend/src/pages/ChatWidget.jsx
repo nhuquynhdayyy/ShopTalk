@@ -13,7 +13,7 @@ const mockMessages = [
   {
     id: 'mock-welcome',
     role: 'assistant',
-    content: 'Dạ, ShopTalk xin chào anh/chị! Em là nhân viên tư vấn ảo của cửa hàng. Anh chị đang quan tâm đến mẫu điện thoại Solana Saga hay phụ kiện nào bên em ạ?'
+    content: 'Dạ, ShopTalk xin chào anh/chị! Em là Mia, nhân viên tư vấn thời trang của shop. Hôm nay anh chị đang tìm kiểu gì ạ — đi chơi, đi làm, hay mặc nhà?'
   }
 ];
 
@@ -243,6 +243,7 @@ const parseMessageContent = (content, onShowQr, t) => {
 
 function ChatBubble({ message, onShowQr, t }) {
   const isUser = message.role === 'user';
+  const isStaff = message.sender === 'staff';
 
   if (message.type === 'voice') {
     return <TranscriptBubble message={message} />;
@@ -254,11 +255,18 @@ function ChatBubble({ message, onShowQr, t }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.18 }}
-      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+      className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
     >
+      {isStaff && (
+        <span className="text-[10px] font-semibold text-amber-700 mb-1 ml-1">
+          👤 Nhân viên hỗ trợ
+        </span>
+      )}
       <div
         className={`max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm ${isUser
-            ? 'rounded-br-sm bg-teal-600 text-white'
+          ? 'rounded-br-sm bg-teal-600 text-white'
+          : isStaff
+            ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-950'
             : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
           }`}
       >
@@ -297,6 +305,7 @@ function ChatWidget() {
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [isEscalated, setIsEscalated] = useState(false);
+  const [isStaffConnected, setIsStaffConnected] = useState(false);
 
   const [language, setLanguage] = useState(i18n.language?.startsWith('vi') ? 'vi' : 'en');
 
@@ -396,11 +405,47 @@ function ChatWidget() {
     ]);
   }, [normalizePaidOrder, qrPayload, t]);
 
-  useWebSocket({
+  const handleStaffJoined = useCallback((payload = {}) => {
+    console.log('[Socket] Nhân viên đã tham gia phòng:', payload);
+    setIsStaffConnected(true);
+  }, []);
+
+  const handleAgentMessage = useCallback((payload = {}) => {
+    console.log('[Socket] Nhận tin nhắn từ nhân viên:', payload);
+    setIsStaffConnected(true); // Đảm bảo ẩn thông báo chờ ngay khi có tin nhắn từ agent_message
+    const messageId = payload.id || generateId();
+    setMessages((current) => {
+      if (current.some(m => m.id === messageId)) return current;
+      return [
+        ...current,
+        {
+          id: messageId,
+          role: 'assistant',
+          sender: 'staff',
+          content: payload.message,
+          timestamp: payload.timestamp || new Date().toISOString()
+        }
+      ];
+    });
+  }, []);
+
+  const socketState = useWebSocket({
     voice_order_created: handleVoiceOrderCreated,
     transcript_received: handleTranscriptReceived,
-    order_paid: handleOrderPaid
+    order_paid: handleOrderPaid,
+    staff_joined: handleStaffJoined,
+    agent_message: handleAgentMessage
   });
+
+  const socket = socketState.socket;
+
+  // Emit join_session để socket client join vào room của sessionId
+  useEffect(() => {
+    if (sessionId && socket) {
+      console.log('[Socket] Gửi join_session cho sessionId:', sessionId);
+      socket.emit('join_session', { sessionId, role: 'client' });
+    }
+  }, [sessionId, socket]);
 
   useEffect(() => {
     let savedSessionId = sessionStorage.getItem('shoptalk_session_id');
@@ -445,7 +490,28 @@ function ChatWidget() {
     event?.preventDefault();
 
     const text = inputValue.trim();
-    if (!text || isTyping || isEscalated) return;
+    if (!text || isTyping) return;
+    if (isEscalated && !isStaffConnected) return;
+
+    if (isEscalated && isStaffConnected) {
+      setInputValue('');
+      const messageId = generateId();
+      setMessages((current) => [
+        ...current,
+        { id: messageId, role: 'user', content: text }
+      ]);
+
+      if (socket) {
+        socket.emit('live_message', {
+          sessionId,
+          message: text,
+          sender: 'user',
+          id: messageId,
+          timestamp: new Date().toISOString()
+        });
+      }
+      return;
+    }
 
     setInputValue('');
     setMessages((current) => [
@@ -509,6 +575,7 @@ function ChatWidget() {
     setSessionId(nextSessionId);
     setMessages(mockMessages);
     setIsEscalated(false);
+    setIsStaffConnected(false);
     setQrPayload(null);
     setPaidReceipt(null);
     setInputValue('');
@@ -575,11 +642,11 @@ function ChatWidget() {
           </AnimatePresence>
 
           {isTyping && <TypingIndicator />}
-          {isEscalated && <StaffHandoff t={t} />}
+          {isEscalated && !isStaffConnected && <StaffHandoff t={t} />}
           <div ref={chatEndRef} />
         </div>
 
-        {!isEscalated && (
+        {(!isEscalated || isStaffConnected) && (
           <div className="border-t border-slate-200 bg-white p-4">
             {qrPayload && (
               <div className="mb-3 flex items-center justify-between rounded-lg bg-teal-50 border border-teal-100 px-4 py-2.5 text-teal-800 text-xs font-medium animate-pulse">

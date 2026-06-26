@@ -1,93 +1,507 @@
 [
   {
-    "id": "prod-1",
-    "name": "Solana Mobile Saga Phone",
-    "price_usdc": 0.1,
-    "stock": 5,
-    "description": "Điện thoại Solana Saga thế hệ đầu tiên, tích hợp ví Web3 phần cứng ngay trong máy, chạy Android tùy chỉnh."
+    "id": "prod-at-001",
+    "sku": "AT-001",
+    "name": "Áo Thun Basic Cotton Unisex",
+    "category": "ao-thun",
+    "price_usdc": 0.25,
+    "price_vnd": 6000,
+    "stock": 120,
+    "size_options": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "color_options": [
+      "Trắng",
+      "Đen",
+      "Xám",
+      "Navy",
+      "Kem",
+      "Xanh lá"
+    ],
+    "description": "Áo thun basic chất liệu cotton 100% thoáng mát, form regular fit phù hợp mọi vóc dáng. Đường may chắc chắn, co giãn 4 chiều, không xù lông sau nhiều lần giặt.",
+    "selling_points": [
+      "Cotton 100% thoáng mát, không bí",
+      "Form regular fit phù hợp mọi dáng người",
+      "Màu không bị phai sau 30+ lần giặt",
+      "Đường chỉ 2 kim bền chắc",
+      "Có thể mặc đi làm, dạo phố, ở nhà đều được"
+    ],
+    "reviews": [
+      {
+        "user": "Ngọc Anh",
+        "rating": 5,
+        "comment": "Vải mềm mịn lắm, mặc cả ngày không bí. Mua lần 2 rồi vì quá thích!",
+        "size_bought": "M"
+      },
+      {
+        "user": "Minh Tuấn",
+        "rating": 4,
+        "comment": "Chất vải đúng như mô tả, màu đẹp, giao hàng nhanh.",
+        "size_bought": "L"
+      },
+      {
+        "user": "Thu Hà",
+        "rating": 5,
+        "comment": "Đặt size S vừa đẹp, dáng áo thanh mảnh. Giá hợp lý!",
+        "size_bought": "S"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/AT-001-white.jpg",
+      "https://cdn.shoptalk.vn/products/AT-001-black.jpg",
+      "https://cdn.shoptalk.vn/products/AT-001-navy.jpg"
+    ]
   },
   {
-    "id": "prod-2",
-    "name": "Solana Mobile Saga v2",
-    "price_usdc": 0.1,
-    "stock": 10,
-    "description": "Điện thoại Solana Saga thế hệ thứ hai (giá test 0.1 USDC). Màn hình AMOLED 6.67 inch, chip Snapdragon 8 Gen 2."
+    "id": "prod-at-002",
+    "sku": "AT-002",
+    "name": "Áo Thun Oversize Trendy",
+    "category": "ao-thun",
+    "price_usdc": 0.3,
+    "price_vnd": 7500,
+    "stock": 85,
+    "size_options": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "color_options": [
+      "Trắng",
+      "Đen",
+      "Beige",
+      "Xanh pastel",
+      "Hồng nhạt"
+    ],
+    "description": "Áo thun oversize phong cách streetwear, form rộng thoải mái. Chất liệu cotton pha spandex, vai thụng đặc trưng. Phù hợp mix với quần baggy, jeans slim, chân váy.",
+    "selling_points": [
+      "Form oversize trendy, đang cực hot",
+      "Vai thụng tôn dáng cho mọi vóc người",
+      "Dễ phối đồ — jeans, váy, shorts đều ổn",
+      "Chất cotton mềm, không cứng cánh sau giặt",
+      "Unisex — cả nam lẫn nữ đều mặc được"
+    ],
+    "reviews": [
+      {
+        "user": "Bảo Trân",
+        "rating": 5,
+        "comment": "Áo thun oversize mặc với quần baggy rất cool, shop tư vấn phối đồ cũng nhiệt tình.",
+        "size_bought": "L"
+      },
+      {
+        "user": "Khánh Linh",
+        "rating": 4,
+        "comment": "Màu thực tế đẹp hơn ảnh. Mua thêm 2 màu nữa rồi 😄",
+        "size_bought": "M"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/AT-002-white.jpg",
+      "https://cdn.shoptalk.vn/products/AT-002-beige.jpg"
+    ]
   },
   {
-    "id": "prod-3",
-    "name": "ShopTalk T-Shirt",
-    "price_usdc": 0.1,
-    "stock": 25,
-    "description": "Áo thun phong cách ShopTalk, chất liệu cotton 100%, thoáng mát. Có size S, M, L, XL."
-  },
-  {
-    "id": "prod-4",
-    "name": "Ốp lưng Saga Phone trong suốt",
-    "price_usdc": 8.00,
-    "stock": 50,
-    "description": "Ốp lưng trong suốt chống sốc dành riêng cho Solana Mobile Saga. Chất liệu TPU cao cấp, bảo vệ 4 góc."
-  },
-  {
-    "id": "prod-5",
-    "name": "Cáp sạc USB-C 1m",
-    "price_usdc": 5.00,
-    "stock": 100,
-    "description": "Cáp sạc nhanh USB-C to USB-C, hỗ trợ PD 65W. Dây bọc dù siêu bền, dài 1 mét."
-  },
-  {
-    "id": "prod-6",
-    "name": "Củ sạc nhanh 65W GaN",
-    "price_usdc": 18.00,
-    "stock": 30,
-    "description": "Adapter sạc nhanh GaN 65W, nhỏ gọn hơn 40% so với sạc thường. Tương thích iPhone, Android, Laptop."
-  },
-  {
-    "id": "prod-7",
-    "name": "Tai nghe TWS Blockchain Edition",
-    "price_usdc": 35.00,
-    "stock": 20,
-    "description": "Tai nghe không dây True Wireless, chống ồn ANC, pin 28 giờ. Thiết kế đặc biệt phiên bản Blockchain Edition."
-  },
-  {
-    "id": "prod-8",
-    "name": "Mũ lưỡi trai ShopTalk",
-    "price_usdc": 12.00,
-    "stock": 40,
-    "description": "Mũ lưỡi trai (cap) thêu logo ShopTalk, chất liệu cotton twill cao cấp. Màu đen, có thể điều chỉnh size."
-  },
-  {
-    "id": "prod-9",
-    "name": "Áo hoodie Crypto Dev",
-    "price_usdc": 28.00,
-    "stock": 15,
-    "description": "Áo hoodie nỉ dày dặn in chữ \"Crypto Dev\" phong cách. Màu xám đậm, có túi kangaroo và mũ trùm."
-  },
-  {
-    "id": "prod-10",
-    "name": "Ledger Nano S Plus",
-    "price_usdc": 79.00,
-    "stock": 8,
-    "description": "Ví cứng (hardware wallet) Ledger Nano S Plus lưu trữ tài sản crypto an toàn offline. Hỗ trợ 5.500+ token."
-  },
-  {
-    "id": "prod-11",
-    "name": "Sticker Pack Web3",
-    "price_usdc": 3.00,
-    "stock": 200,
-    "description": "Bộ 20 sticker chủ đề Web3/Crypto: Solana, Bitcoin, Ethereum, NFT, DeFi. Chất liệu vinyl chống nước."
-  },
-  {
-    "id": "prod-12",
-    "name": "Balo Laptop Crypto",
-    "price_usdc": 45.00,
-    "stock": 12,
-    "description": "Balo đựng laptop 15.6 inch thiết kế chủ đề crypto. Chống thấm nước, có ngăn riêng cho ví cứng và cáp."
-  },
-  {
-    "id": "prod-13",
-    "name": "Phantom Wallet Keychain",
-    "price_usdc": 6.00,
+    "id": "prod-sm-001",
+    "sku": "SM-001",
+    "name": "Áo Sơ Mi Oxford Công Sở Nam/Nữ",
+    "category": "ao-so-mi",
+    "price_usdc": 0.55,
+    "price_vnd": 14000,
     "stock": 60,
-    "description": "Móc chìa khóa hình logo Phantom Wallet bằng kim loại zinc alloy cao cấp. Quà tặng ý nghĩa cho người yêu Solana."
+    "size_options": [
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "color_options": [
+      "Trắng",
+      "Xanh nhạt",
+      "Xanh navy",
+      "Hồng nhạt",
+      "Kẻ sọc trắng-xanh"
+    ],
+    "description": "Áo sơ mi vải Oxford cao cấp, form slim fit lịch sự. Không nhăn sau cả ngày dài, phù hợp môi trường văn phòng và các dịp quan trọng. Cổ áo cứng cáp, đường may tỉ mỉ.",
+    "selling_points": [
+      "Vải Oxford cao cấp, không nhăn cả ngày",
+      "Chống ẩm nhẹ — không ố mồ hôi",
+      "Form slim fit tôn dáng, trông chuyên nghiệp",
+      "Cúc nhựa cao cấp, không bung sau giặt máy",
+      "Phù hợp đi làm, họp, đi ăn nhà hàng"
+    ],
+    "reviews": [
+      {
+        "user": "Phúc Nguyên",
+        "rating": 5,
+        "comment": "Áo sơ mi đi làm nhìn rất chỉnh, vải không nhăn dù ngồi cả ngày.",
+        "size_bought": "L"
+      },
+      {
+        "user": "Hoài Thu",
+        "rating": 5,
+        "comment": "Mặc đi họp khách hàng, được khen mặc đẹp. Chất lượng xứng đáng với giá.",
+        "size_bought": "M"
+      },
+      {
+        "user": "Duy Anh",
+        "rating": 4,
+        "comment": "Form áo chuẩn, đường may sắc sảo. Chỉ tiếc giao hơi lâu 1 chút.",
+        "size_bought": "XL"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/SM-001-white.jpg",
+      "https://cdn.shoptalk.vn/products/SM-001-blue.jpg"
+    ]
+  },
+  {
+    "id": "prod-sm-002",
+    "sku": "SM-002",
+    "name": "Áo Sơ Mi Linen Tay Dài Nữ",
+    "category": "ao-so-mi",
+    "price_usdc": 0.45,
+    "price_vnd": 11000,
+    "stock": 45,
+    "size_options": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "color_options": [
+      "Trắng kem",
+      "Be",
+      "Xanh sage",
+      "Nâu caramel"
+    ],
+    "description": "Áo sơ mi linen tay dài phong cách minimalist, form boxy thoải mái. Chất linen tự nhiên thoáng mát, càng mặc càng mềm. Phù hợp mặc đi làm, dạo phố, đi cafe.",
+    "selling_points": [
+      "Chất linen 100% tự nhiên, cực thoáng mát",
+      "Càng mặc càng mềm và quen tay",
+      "Màu trung tính dễ phối với mọi loại đồ",
+      "Form boxy thoải mái, che được vòng 2",
+      "Trendy theo phong cách Hàn Quốc minimalist"
+    ],
+    "reviews": [
+      {
+        "user": "Tú Anh",
+        "rating": 5,
+        "comment": "Áo linen mát lắm, mặc mùa hè cực phẩm. Màu sage đẹp hơn ảnh nhiều!",
+        "size_bought": "S"
+      },
+      {
+        "user": "Ngọc Mai",
+        "rating": 4,
+        "comment": "Form áo vừa đủ rộng, mặc che vòng 2 rất tốt. Mua thêm màu be rồi.",
+        "size_bought": "M"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/SM-002-cream.jpg",
+      "https://cdn.shoptalk.vn/products/SM-002-sage.jpg"
+    ]
+  },
+  {
+    "id": "prod-qj-001",
+    "sku": "QJ-001",
+    "name": "Quần Jeans Slim Fit Nam",
+    "category": "quan-jeans",
+    "price_usdc": 0.7,
+    "price_vnd": 17500,
+    "stock": 75,
+    "size_options": [
+      "28",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34"
+    ],
+    "color_options": [
+      "Xanh đậm",
+      "Xanh nhạt",
+      "Đen",
+      "Xám"
+    ],
+    "description": "Quần jeans slim fit denim co giãn 4 chiều, tôn dáng mà không bó gò bó. Chất denim dày dặn, đường may kỹ lưỡng. Màu không bị phai, giữ form lâu bền.",
+    "selling_points": [
+      "Denim co giãn 4 chiều — thoải mái cả ngày",
+      "Slim fit tôn dáng chân, trông cao hơn",
+      "Màu bền — không phai sau 20+ lần giặt",
+      "Túi sâu thực sự dùng được",
+      "Phối đồ cực dễ — áo thun, sơ mi đều ổn"
+    ],
+    "reviews": [
+      {
+        "user": "Lan Phương",
+        "rating": 5,
+        "comment": "Quần jeans co giãn cực tốt, mặc cả ngày vẫn thoải mái. Mua 2 màu luôn!",
+        "size_bought": "28"
+      },
+      {
+        "user": "Trọng Nhân",
+        "rating": 4,
+        "comment": "Chất denim dày dặn, màu không bị phai sau 5 lần giặt. Hài lòng!",
+        "size_bought": "30"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/QJ-001-darkblue.jpg",
+      "https://cdn.shoptalk.vn/products/QJ-001-black.jpg"
+    ]
+  },
+  {
+    "id": "prod-qj-002",
+    "sku": "QJ-002",
+    "name": "Quần Jeans Ống Rộng Nữ",
+    "category": "quan-jeans",
+    "price_usdc": 0.65,
+    "price_vnd": 16000,
+    "stock": 50,
+    "size_options": [
+      "26",
+      "27",
+      "28",
+      "29",
+      "30"
+    ],
+    "color_options": [
+      "Xanh nhạt vintage",
+      "Xanh đậm",
+      "Trắng"
+    ],
+    "description": "Quần jeans ống rộng (wide-leg) phong cách vintage, cạp cao tôn eo. Chất denim nhẹ vừa phải, thoải mái khi di chuyển. Phối với áo croptop, áo thun tucked in cực đẹp.",
+    "selling_points": [
+      "Ống rộng tôn dáng chân và che được nhược điểm",
+      "Cạp cao định hình eo tự nhiên",
+      "Phong cách vintage đang cực thịnh",
+      "Phối với croptop hoặc áo sơ mi tucked in đều đẹp",
+      "Chất denim nhẹ, đi lại thoải mái"
+    ],
+    "reviews": [
+      {
+        "user": "Mỹ Linh",
+        "rating": 5,
+        "comment": "Quần ống rộng che được bắp đùi to của mình, cạp cao còn tôn eo nữa. Perfect!",
+        "size_bought": "28"
+      },
+      {
+        "user": "Hà Vy",
+        "rating": 5,
+        "comment": "Mặc với áo croptop đẹp xuất sắc. Đặt mua thêm màu trắng rồi.",
+        "size_bought": "27"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/QJ-002-vintage.jpg",
+      "https://cdn.shoptalk.vn/products/QJ-002-white.jpg"
+    ]
+  },
+  {
+    "id": "prod-vy-001",
+    "sku": "VY-001",
+    "name": "Váy Midi Chữ A Công Sở",
+    "category": "vay-dam",
+    "price_usdc": 0.5,
+    "price_vnd": 12500,
+    "stock": 40,
+    "size_options": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "color_options": [
+      "Đen",
+      "Kem",
+      "Navy",
+      "Xanh cobalt",
+      "Đỏ đô"
+    ],
+    "description": "Váy midi chữ A dáng xòe nhẹ, dài qua gối. Chất vải dệt kim cao cấp không nhăn, không bí. Phù hợp đi làm văn phòng, họp, hoặc đi ăn tối lịch sự.",
+    "selling_points": [
+      "Dáng chữ A che khéo bắp đùi, tôn vóc dáng",
+      "Vải dệt kim cao cấp — không nhăn cả ngày",
+      "Dài qua gối — phù hợp môi trường công sở",
+      "Có lớp lót trong, không bị lộ",
+      "Phối được với áo thun, sơ mi, áo blazer"
+    ],
+    "reviews": [
+      {
+        "user": "Huyền Trang",
+        "rating": 5,
+        "comment": "Váy midi này mặc đi làm hay đi chơi đều hợp. Vải không bị nhăn, nhẹ mát.",
+        "size_bought": "M"
+      },
+      {
+        "user": "Kim Ngân",
+        "rating": 5,
+        "comment": "Xinh lắm! Đặt size S vừa đẹp, eo được tôn lên. Sẽ mua tiếp!",
+        "size_bought": "S"
+      },
+      {
+        "user": "Phương Vy",
+        "rating": 4,
+        "comment": "Màu thật rất đẹp, giao đúng hàng. Chỉ ước có thêm màu navy.",
+        "size_bought": "M"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/VY-001-black.jpg",
+      "https://cdn.shoptalk.vn/products/VY-001-navy.jpg"
+    ]
+  },
+  {
+    "id": "prod-dd-001",
+    "sku": "DD-001",
+    "name": "Đầm Wrap Floral Dự Tiệc",
+    "category": "vay-dam",
+    "price_usdc": 0.85,
+    "price_vnd": 21000,
+    "stock": 30,
+    "size_options": [
+      "XS",
+      "S",
+      "M",
+      "L"
+    ],
+    "color_options": [
+      "Hoa nhí nền đen",
+      "Hoa nền trắng",
+      "Hoa nền xanh navy"
+    ],
+    "description": "Đầm wrap (quấn) họa tiết hoa nhí, cổ chữ V sang trọng. Chất vải chiffon nhẹ nhàng, duyên dáng khi di chuyển. Phù hợp dự tiệc cưới, sinh nhật, sự kiện.",
+    "selling_points": [
+      "Dáng wrap tôn eo tự nhiên, phù hợp mọi số đo",
+      "Chiffon nhẹ — đầm bay bay duyên dáng khi đi",
+      "Cổ V sang trọng, phù hợp dự tiệc",
+      "Họa tiết hoa nhí lịch sự, không quá nổi",
+      "Có dây buộc điều chỉnh eo linh hoạt"
+    ],
+    "reviews": [
+      {
+        "user": "Bích Phượng",
+        "rating": 5,
+        "comment": "Mặc đi đám cưới bạn, được khen suốt buổi. Chất vải nhẹ mát, đi cả đêm không mệt.",
+        "size_bought": "M"
+      },
+      {
+        "user": "Thanh Hương",
+        "rating": 5,
+        "comment": "Dáng wrap tôn dáng cực kỳ, che được bụng mà vẫn quyến rũ. Đặt thêm màu nền trắng rồi!",
+        "size_bought": "S"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/DD-001-black-floral.jpg",
+      "https://cdn.shoptalk.vn/products/DD-001-white-floral.jpg"
+    ]
+  },
+  {
+    "id": "prod-ak-001",
+    "sku": "AK-001",
+    "name": "Áo Khoác Dù Nhẹ Chống Gió",
+    "category": "ao-khoac",
+    "price_usdc": 0.99,
+    "price_vnd": 25000,
+    "stock": 55,
+    "size_options": [
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "color_options": [
+      "Đen",
+      "Navy",
+      "Xanh rêu",
+      "Be",
+      "Đỏ đô"
+    ],
+    "description": "Áo khoác dù nhẹ chống gió, chống thấm nước nhẹ. Có mũ chống mưa nhỏ, túi kéo khóa tiện lợi. Gấp gọn được bỏ vào túi. Phù hợp đi du lịch, đi xe máy, leo núi nhẹ.",
+    "selling_points": [
+      "Siêu nhẹ — chỉ 280g, không cảm thấy đang mặc",
+      "Chống gió và thấm nước nhẹ",
+      "Có mũ chống mưa bất ngờ",
+      "Gấp gọn vừa túi xách nhỏ",
+      "Phù hợp du lịch, dã ngoại, đi xe máy"
+    ],
+    "reviews": [
+      {
+        "user": "Thanh Thảo",
+        "rating": 5,
+        "comment": "Áo khoác dù nhẹ nhưng giữ ấm tốt, mặc đi máy bay vừa đủ ấm.",
+        "size_bought": "M"
+      },
+      {
+        "user": "Minh Khoa",
+        "rating": 4,
+        "comment": "Form áo đẹp, màu navy thanh lịch. Mua làm quà tặng bạn bè.",
+        "size_bought": "L"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/AK-001-black.jpg",
+      "https://cdn.shoptalk.vn/products/AK-001-navy.jpg"
+    ]
+  },
+  {
+    "id": "prod-ah-001",
+    "sku": "AH-001",
+    "name": "Áo Hoodie Nỉ Bông Unisex",
+    "category": "ao-khoac",
+    "price_usdc": 0.8,
+    "price_vnd": 20000,
+    "stock": 70,
+    "size_options": [
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "color_options": [
+      "Đen",
+      "Xám nhạt",
+      "Trắng",
+      "Xanh navy",
+      "Nâu"
+    ],
+    "description": "Áo hoodie chất nỉ bông dày ấm, mặt trong lót lông nhung mềm mại. Túi kangaroo rộng tiện lợi, dây rút mũ điều chỉnh được. Phong cách casual, phù hợp mùa lạnh.",
+    "selling_points": [
+      "Nỉ bông lót lông — ấm áp trong mùa lạnh",
+      "Form rộng thoải mái, phù hợp mặc ở nhà hoặc ra đường",
+      "Túi kangaroo to, để tay ấm cực tiện",
+      "Màu trung tính dễ phối đồ",
+      "Unisex — cả nam nữ đều mặc đẹp"
+    ],
+    "reviews": [
+      {
+        "user": "Quỳnh Như",
+        "rating": 5,
+        "comment": "Áo ấm cực, mặc ngay từ khi nhận được. Chất nỉ dày không xù sau 10 lần giặt.",
+        "size_bought": "L"
+      },
+      {
+        "user": "Gia Huy",
+        "rating": 5,
+        "comment": "Form rộng mặc thoải mái, màu xám nhạt phối gì cũng đẹp. Mua 2 cái luôn!",
+        "size_bought": "XL"
+      }
+    ],
+    "images": [
+      "https://cdn.shoptalk.vn/products/AH-001-black.jpg",
+      "https://cdn.shoptalk.vn/products/AH-001-gray.jpg"
+    ]
   }
 ]

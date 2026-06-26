@@ -12,9 +12,13 @@ const { verifyPayment } = require('../services/verify.service');
 router.get('/', async (req, res) => {
   try {
     const orders = await getAllOrders();
+    const mappedOrders = orders.map(order => ({
+      ...order,
+      isWithdrawn: order.is_withdrawn || false
+    }));
     return res.status(200).json({
       success: true,
-      data: orders
+      data: mappedOrders
     });
   } catch (error) {
     console.error('Lỗi khi xử lý GET /orders:', error.message);
@@ -94,7 +98,10 @@ router.get('/:id', async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: order
+      data: {
+        ...order,
+        isWithdrawn: order.is_withdrawn || false
+      }
     });
   } catch (error) {
     console.error(`Lỗi khi xử lý GET /orders/${req.params.id}:`, error.message);
@@ -186,6 +193,38 @@ router.get('/:id/check-payment', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Lỗi hệ thống khi xác thực thanh toán'
+    });
+  }
+});
+
+/**
+ * Route: PATCH /orders/:id/withdraw
+ * Mô tả: Cập nhật trạng thái đơn hàng đã được rút tiền về ngân hàng (is_withdrawn = true).
+ */
+router.patch('/:id/withdraw', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { updateOrderWithdrawalStatus } = require('../models/order.model');
+
+    const updatedOrder = await updateOrderWithdrawalStatus(id, true);
+
+    if (!updatedOrder) {
+      return res.status(404).json({
+        success: false,
+        error: `Không tìm thấy đơn hàng với ID: ${id}`
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Cập nhật trạng thái rút tiền thành công!',
+      data: updatedOrder
+    });
+  } catch (error) {
+    console.error(`Lỗi khi PATCH /orders/${req.params.id}/withdraw:`, error.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Lỗi hệ thống khi cập nhật trạng thái rút tiền'
     });
   }
 });
