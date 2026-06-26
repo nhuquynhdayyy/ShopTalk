@@ -61,7 +61,7 @@ const runOnePoll = async () => {
 
     for (const order of pendingOrders) {
       try {
-        const result = await verifyPayment(order.reference, order.amount, order.seller_wallet);
+        const result = await verifyPayment(order);
 
         if (result.success) {
           // ✅ Thanh toán thành công — cập nhật DB ngay lập tức

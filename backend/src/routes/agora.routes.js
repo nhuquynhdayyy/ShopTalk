@@ -128,6 +128,8 @@ const generateProductListPrompt = formatProductCatalogForPrompt;
 const fallbackDetectVoiceOrder = async (messages, language = 'vi') => {
   const lang = normalizeLanguage(language);
   const allContent = messages.map(m => m.content).join(' ').toLowerCase();
+  // Pre-compute diacritic-normalized version of conversation content for matching
+  const allContentNorm = allContent.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
   const hasBuyIntent = allContent.includes('mua') || allContent.includes('đặt hàng') || allContent.includes('chốt') || allContent.includes('chot') || allContent.includes('order')
     || allContent.includes('buy') || allContent.includes('purchase') || allContent.includes('i want') || allContent.includes("i'll take");
 
@@ -143,12 +145,37 @@ const fallbackDetectVoiceOrder = async (messages, language = 'vi') => {
     const products = await getProducts(language);
     
     for (const product of products) {
-      const productNameLower = product.name.toLowerCase();
-      const normalizedName = productNameLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      
-      if (allContent.includes(productNameLower) || 
-          allContent.includes(normalizedName) ||
-          allContent.includes(product.sku.toLowerCase())) {
+      const parseTranslations = (p) => {
+        if (!p || !p.translations) return {};
+        if (typeof p.translations === 'string') {
+          try { return JSON.parse(p.translations); } catch (_) { return {}; }
+        }
+        return p.translations;
+      };
+
+      const translations = parseTranslations(product) || {};
+      const enName = translations.en?.name || '';
+      const viName = translations.vi?.name || product.name || '';
+
+      const nameCandidates = [
+        product.name,
+        viName,
+        enName,
+        product.sku
+      ].filter(Boolean).map(n => n.toLowerCase());
+
+      const matched = nameCandidates.some(name => {
+        // Normalize candidate name (remove diacritics)
+        const normName = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+        // Check 1: allContent contains full candidate name (exact or with diacritics)
+        if (allContent.includes(name) || allContentNorm.includes(normName)) return true;
+        // Check 2: Any significant word from normName appears in allContentNorm (partial match)
+        // e.g. "oversize" in conversation matches "ao thun oversize trendy"
+        const words = normName.split(/\s+/).filter(w => w.length >= 4);
+        return words.some(w => allContentNorm.includes(w));
+      });
+
+      if (matched) {
         productName = product.name;
         amount = parseFloat(product.price_usdc);
         break;
@@ -214,7 +241,7 @@ const fallbackDetectVoiceOrder = async (messages, language = 'vi') => {
   };
 };
 
-const getSlidingWindow = (messages, limit = 6) => {
+const getSlidingWindow = (messages, limit = 10) => {
   const systemMsgs = messages.filter(m => m.role === 'system');
   const otherMsgs = messages.filter(m => m.role !== 'system');
   
@@ -511,6 +538,83 @@ ${productListPrompt}
         const detectedPhone = detection.customerPhone || 'Chưa cung cấp';
         const detectedAddress = detection.customerAddress || 'Chưa cung cấp';
 
+        // Kiểm tra tồn kho của sản phẩm trước khi tạo đơn hàng
+        const productResult = await checkInventory(detectedProductName, language);
+        if (!productResult || !productResult.found || productResult.stock <= 0) {
+          console.log('[LLM Webhook] Sản phẩm hết hàng hoặc không tìm thấy, không tạo đơn:', productResult);
+          
+          const speakText = language === 'en'
+            ? "I'm sorry, this item is currently out of stock. Let me connect you with our staff for support."
+            : "Dạ hiện tại em chưa tìm thấy sản phẩm này trong kho. Em sẽ chuyển sang nhân viên thật để kiểm tra và hỗ trợ anh/chị chính xác hơn ạ.";
+
+          const { emitEscalationEvent } = require('../services/ai.service');
+          emitEscalationEvent(sessionId, `Khách mua sản phẩm qua Voice nhưng hết hàng: ${detectedProductName}`, 'inventory_not_found');
+
+          if (sessionId) {
+            const assistantMsgId = 'ai-order-out-of-stock-' + Date.now();
+            const { emitTranscriptReceived } = require('../websocket/socket.server');
+            emitTranscriptReceived({
+              sessionId,
+              sender: 'assistant',
+              transcript: speakText,
+              type: 'voice',
+              id: assistantMsgId
+            });
+          }
+
+          if (stream) {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+
+            const chunk1 = {
+              id: 'voice-order-fail-' + Date.now(),
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [
+                {
+                  index: 0,
+                  delta: { content: speakText },
+                  finish_reason: null
+                }
+              ]
+            };
+            res.write(`data: ${JSON.stringify(chunk1)}\n\n`);
+
+            const chunk2 = {
+              id: 'voice-order-fail-' + Date.now(),
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [
+                {
+                  index: 0,
+                  delta: {},
+                  finish_reason: 'stop'
+                }
+              ]
+            };
+            res.write(`data: ${JSON.stringify(chunk2)}\n\n`);
+            res.write('data: [DONE]\n\n');
+            res.end();
+            return;
+          } else {
+            return res.json({
+              id: 'voice-order-fail-' + Date.now(),
+              object: 'chat.completion',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [{
+                message: { role: 'assistant', content: speakText },
+                index: 0,
+                finish_reason: 'stop'
+              }],
+              usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+            });
+          }
+        }
+
         // Gọi executeTool để dùng chung logic và validation với Chat (check inventory, check high-value order, map session)
         const { executeTool } = require('../services/ai.service');
         const toolResultStr = await executeTool('create_order', {
@@ -533,9 +637,13 @@ ${productListPrompt}
             escalate = true;
             escalationReason = result.reason || 'tool_escalation';
             if (result.reason === 'inventory_not_found') {
-              speakText = 'Dạ hiện tại em chưa tìm thấy sản phẩm này trong kho. Em sẽ chuyển sang nhân viên thật để kiểm tra và hỗ trợ anh/chị chính xác hơn ạ.';
+              speakText = language === 'en'
+                ? "I'm sorry, this item is currently out of stock. Let me connect you with our staff for support."
+                : 'Dạ hiện tại em chưa tìm thấy sản phẩm này trong kho. Em sẽ chuyển sang nhân viên thật để kiểm tra và hỗ trợ anh/chị chính xác hơn ạ.';
             } else if (result.reason === 'high_value_order') {
-              speakText = `Dạ đơn hàng giá trị cao ${result.amount} USDC cần chủ shop duyệt trực tiếp ạ. Em sẽ kết nối với nhân viên thật ngay nhé.`;
+              speakText = language === 'en'
+                ? `This high-value order of ${result.amount} USDC requires store manager approval. Let me transfer you to our live staff right away.`
+                : `Dạ đơn hàng giá trị cao ${result.amount} USDC cần chủ shop duyệt trực tiếp ạ. Em sẽ kết nối với nhân viên thật ngay nhé.`;
             }
             
             const { emitEscalationEvent } = require('../services/ai.service');
@@ -716,7 +824,7 @@ ${productListPrompt}
 
       const streamResponse = await groq.chat.completions.create({
         model: 'llama-3.1-8b-instant',
-        messages: getSlidingWindow(messages, 4),
+        messages: getSlidingWindow(messages, 10),
         max_tokens: 100,
         temperature: 0.6,
         stream: true
@@ -751,7 +859,7 @@ ${productListPrompt}
     } else {
       const response = await groq.chat.completions.create({
         model: 'llama-3.1-8b-instant',
-        messages: getSlidingWindow(messages, 4),
+        messages: getSlidingWindow(messages, 10),
         max_tokens: 100,
         temperature: 0.6,
       });

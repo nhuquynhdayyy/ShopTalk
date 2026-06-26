@@ -146,9 +146,9 @@ test('RATE_LIMITED ở đơn đầu: phải dừng (break) ngay, KHÔNG xử lý
   const { runOnePoll } = freshRequireWatcher({
     getPendingOrders: async () => orders,
     updateOrderStatus: async (id, status) => ({ id, status }),
-    verifyPayment: async (reference) => {
-      processedOrderIds.push(reference);
-      if (reference === 'ref-A') {
+    verifyPayment: async (order) => {
+      processedOrderIds.push(order.reference);
+      if (order.reference === 'ref-A') {
         return { success: false, error: 'RATE_LIMITED' };
       }
       return { success: true, signature: 'sig-B' };
@@ -175,9 +175,9 @@ test('PAYMENT_NOT_FOUND ở đơn đầu: vẫn tiếp tục xử lý đơn hàn
   const { runOnePoll } = freshRequireWatcher({
     getPendingOrders: async () => orders,
     updateOrderStatus: async (id, status, sig) => ({ id, status, tx_signature: sig }),
-    verifyPayment: async (reference) => {
-      processedOrderIds.push(reference);
-      if (reference === 'ref-A') return { success: false, error: 'PAYMENT_NOT_FOUND' };
+    verifyPayment: async (order) => {
+      processedOrderIds.push(order.reference);
+      if (order.reference === 'ref-A') return { success: false, error: 'PAYMENT_NOT_FOUND' };
       return { success: true, signature: 'sig-B' };
     },
     emitOrderPaid: () => {},
@@ -200,9 +200,9 @@ test('verifyPayment throw exception ở đơn đầu: đơn thứ 2 vẫn phải
   const { runOnePoll } = freshRequireWatcher({
     getPendingOrders: async () => orders,
     updateOrderStatus: async (id, status, sig) => ({ id, status, tx_signature: sig }),
-    verifyPayment: async (reference) => {
-      processedOrderIds.push(reference);
-      if (reference === 'ref-A') throw new Error('Lỗi mạng đột ngột');
+    verifyPayment: async (order) => {
+      processedOrderIds.push(order.reference);
+      if (order.reference === 'ref-A') throw new Error('Lỗi mạng đột ngột');
       return { success: true, signature: 'sig-B' };
     },
     emitOrderPaid: () => {},

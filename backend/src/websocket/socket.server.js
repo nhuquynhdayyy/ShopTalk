@@ -26,23 +26,52 @@ const emitSocketEvent = (eventName, payload) => {
 const emitOrderPaid = (order) => {
   const payload = {
     orderId: order.id,
+    id: order.id,
     reference: order.reference,
     amount: Number(order.amount),
     productName: order.product_name,
+    product_name: order.product_name,
     txSignature: order.tx_signature,
+    tx_signature: order.tx_signature,
+    status: 'paid',
     paidAt: new Date().toISOString(),
   };
 
-  emitSocketEvent('payment_confirmed', { orderId: order.id });
-
+  // Lấy sessionId từ orderSessions để emit vào đúng room
+  let sessionId = null;
   try {
     const { orderSessions, addSystemMessageToSession } = require('../services/ai.service');
-    const sessionId = orderSessions.get(order.id);
+    sessionId = orderSessions.get(order.id);
     if (sessionId) {
       addSystemMessageToSession(sessionId, 'Đơn hàng đã được thanh toán thành công. Bạn không cần hỏi địa chỉ hay thông tin gì nữa, hãy cảm ơn và chào khách.');
     }
   } catch (err) {
     console.error('[SocketServer] Error syncing paid status to session:', err.message);
+  }
+
+  // Emit payment_confirmed vào room cụ thể của session (nếu có)
+  if (sessionId && io) {
+    const room = getSessionRoom(sessionId);
+    console.log(`[Socket.io] Emitting payment_confirmed to room: ${room}, orderId: ${order.id}`);
+    io.to(room).emit('payment_confirmed', { 
+      orderId: order.id,
+      sessionId: sessionId,
+      order: payload
+    });
+    console.log(`[Socket.io] Emitting payment_confirmed globally, orderId: ${order.id}`);
+    emitSocketEvent('payment_confirmed', {
+      orderId: order.id,
+      sessionId: sessionId,
+      order: payload
+    });
+  } else {
+    // Fallback: emit toàn cục nếu không có sessionId (backward compatibility)
+    console.log(`[Socket.io] Emitting payment_confirmed globally (no session), orderId: ${order.id}`);
+    emitSocketEvent('payment_confirmed', {
+      orderId: order.id,
+      sessionId: sessionId,
+      order: payload
+    });
   }
 
   return emitSocketEvent('order_paid', payload);

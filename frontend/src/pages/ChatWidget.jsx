@@ -327,6 +327,7 @@ function ChatWidget() {
   const [qrPayload, setQrPayload] = useState(null);
   const [paidReceipt, setPaidReceipt] = useState(null);
   const chatEndRef = useRef(null);
+  const paidOrderIdsRef = useRef(new Set());
 
   const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute, setMute } = useAgoraVoice(sessionId);
   const { setIsInCall: setGlobalInCall, registerCallHandlers } = useCallStatus();
@@ -442,14 +443,22 @@ function ChatWidget() {
 
   const handleOrderPaid = useCallback((payload = {}) => {
     const paidOrder = normalizePaidOrder(payload);
-    const currentQrOrderId = qrPayload?.order?.id;
+    const paidOrderKey = paidOrder.id || paidOrder.orderId || paidOrder.tx_signature || paidOrder.txSignature;
+    const shouldAppendMessage = !paidOrderKey || !paidOrderIdsRef.current.has(paidOrderKey);
 
-    if (!paidOrder.id || !currentQrOrderId || paidOrder.id === currentQrOrderId) {
-      setQrPayload(null);
+    if (paidOrderKey) {
+      paidOrderIdsRef.current.add(paidOrderKey);
     }
 
+    setQrPayload((currentQrPayload) => {
+      const currentQrOrderId = currentQrPayload?.order?.id;
+      const shouldClose = !paidOrder.id || !currentQrOrderId || paidOrder.id === currentQrOrderId;
+      return shouldClose ? null : currentQrPayload;
+    });
+
     setPaidReceipt(paidOrder);
-    setMessages((current) => [
+    if (shouldAppendMessage) {
+      setMessages((current) => [
       ...current,
       {
         id: `paid-${paidOrder.id || Date.now()}`,
@@ -459,35 +468,116 @@ function ChatWidget() {
           amountText: paidOrder.amount ? ` ${Number(paidOrder.amount).toFixed(2)} USDC` : ''
         })
       }
-    ]);
-  }, [normalizePaidOrder, qrPayload, t]);
-
-  const handlePaymentConfirmed = useCallback((payload = {}) => {
-    console.log('[Socket] Nhận sự kiện payment_confirmed:', payload);
-    const confirmedOrderId = payload.orderId || payload.id;
-    const currentQrOrderId = qrPayload?.order?.id;
-
-    if (confirmedOrderId && currentQrOrderId && confirmedOrderId === currentQrOrderId) {
-      setQrPayload(null);
-
-      const paidOrder = {
-        id: confirmedOrderId,
-        product_name: qrPayload?.order?.product_name || t('components.order.default_product', 'Đơn hàng ShopTalk'),
-        amount: qrPayload?.order?.amount || 0,
-        status: 'paid'
-      };
-      setPaidReceipt(paidOrder);
-
-      setMessages((current) => [
-        ...current,
-        {
-          id: `confirmed-${confirmedOrderId}-${Date.now()}`,
-          role: 'assistant',
-          content: t('chat.system.payment_confirmed_msg', 'Hệ thống đã nhận được thanh toán của bạn, cảm ơn!')
-        }
       ]);
     }
-  }, [qrPayload, t]);
+  }, [normalizePaidOrder, t]);
+
+  useEffect(() => {
+    const orderId = qrPayload?.order?.id;
+    if (!orderId || mockOrderDetailsById.has(orderId)) return undefined;
+
+    let cancelled = false;
+    let timerId = null;
+
+    const pollOrderStatus = async () => {
+      try {
+        const response = await api.getOrderById(orderId, currentLang);
+        const orderData = response?.data || null;
+
+        if (cancelled) return;
+
+        if (orderData?.status === 'paid') {
+          handleOrderPaid({ order: orderData });
+          return;
+        }
+      } catch (error) {
+        console.warn('[Payment Poll] Không thể kiểm tra trạng thái đơn hàng:', error.message);
+      }
+
+      if (!cancelled) {
+        timerId = window.setTimeout(pollOrderStatus, 2000);
+      }
+    };
+
+    pollOrderStatus();
+
+    return () => {
+      cancelled = true;
+      if (timerId) window.clearTimeout(timerId);
+    };
+  }, [qrPayload?.order?.id, currentLang, handleOrderPaid]);
+
+  const handlePaymentConfirmed = useCallback((payload = {}) => {
+    const confirmedOrderId = payload.orderId || payload.id;
+
+    console.log('[Socket] payment_confirmed event received:', {
+      confirmedOrderId,
+      payload
+    });
+
+    // Dùng functional setState để đọc giá trị qrPayload MỚI NHẤT (tránh stale closure)
+    setQrPayload((currentQrPayload) => {
+      // Nếu không có QR đang mở, không cần làm gì
+      if (!currentQrPayload) {
+        console.log('[Socket] payment_confirmed: Không có QR đang mở, bỏ qua');
+        return currentQrPayload;
+      }
+
+      const currentQrOrderId = currentQrPayload?.order?.id;
+
+      console.log('[Socket] payment_confirmed: Kiểm tra orderId:', {
+        confirmedOrderId,
+        currentQrOrderId,
+        idMatch: confirmedOrderId === currentQrOrderId
+      });
+
+      // Logic đóng QR:
+      // 1. Nếu server GỬI orderId và nó KHỚP với QR hiện tại → đóng QR
+      // 2. Nếu server KHÔNG GỬI orderId (backward compatibility) → đóng QR hiện tại
+      const shouldClose = !confirmedOrderId || confirmedOrderId === currentQrOrderId;
+
+      if (shouldClose) {
+        console.log('[Socket] payment_confirmed: Đóng QR modal và hiển thị thông báo thành công');
+        
+        // Trigger side effects sau khi đóng QR
+        const finalOrderId = confirmedOrderId || currentQrOrderId;
+        const paidOrder = {
+          id: finalOrderId,
+          product_name: currentQrPayload?.order?.product_name || t('components.order.default_product', 'Đơn hàng ShopTalk'),
+          amount: currentQrPayload?.order?.amount || 0,
+          status: 'paid'
+        };
+        
+        // Dùng setTimeout để không gọi setState trong setState
+        setTimeout(() => {
+          setPaidReceipt(paidOrder);
+          setMessages((current) => [
+            ...current,
+            {
+              id: `confirmed-${finalOrderId || Date.now()}-${Date.now()}`,
+              role: 'assistant',
+              content: t('chat.system.payment_confirmed_msg', 'Hệ thống đã nhận được thanh toán của bạn, cảm ơn!')
+            }
+          ]);
+          
+          // Phát âm thanh thành công (optional)
+          try {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGnuPvuWYdBjGH0fPTgjMGHm7A7+OZJQ8WdcXy2I88EBJbvO/jpE4QDVK26vCsWRAMPpXe8L5xIAc5iND02okzBxtsvejtqVkQDUuu5/CuWRAMPJLi77t0IQY1hM711ZI8DBZpvuzroVUQDUin5PG0ZBsHN4XP8dWRPQsVaMjtqpYSC0ap5O+yXxcJOpTg8MVxJQY2h9Dy0Io9CxZnv+zpoE8PC06s5+60YBoGOIrS8tiMOwgWasDt5aFKDwtTqOTvt2AcCDaI0PLWkEEKFXHE79GJNQgWasDt5aFLDgtRquLvs2IcCDaG0PLWjT0IFmvA7eahSwsLUavj77RhGwc3h9Dy15A9ChVwyO7QiTYIFWq/7OWgTAsLUq7i77JiHAg1h9Dy15I9ChVwyO7RijUIFWu/7OWfTQsLUq7h77NjHAg1h9Dy2JE+ChVxyO7RizQIFWrA7OafSwwKU6/i77JiHAg2htDy2JI8ChV0yO7QizYIFWnA7OWfTAwKU6/j77NjHQg2htDy2ZA+ChZ0x+7RijYIFWnA7OafTAwKVLDi77NjHQg2h9Dy2JM8ChZ0x+7RijcIFWnA7OWfTAwKVLDi77NjHQg2h9Dy2ZM8ChZ1x+7QijgHFmrA7OWfTQ4KVLDi77RkHQc3h9Dy2JQ7ChZ1xu3RijgHFmrA7OafTQ4KVLDi77RkHQc3h9Dy2JQ6ChZ2xu3RijcHFmrA7OafTQ8KVbDi77RkHQc3h9Dy2pM6ChZ2x+3SijcHFmrA7OafTg8KVbDi77VkHgc3h9Dy2pM6ChZ2x+3SijcHF2vA7OafTg8KVbDi77VlHgc3htDy2ZM6CRZ2x+3SijcHF2vB7OafTQ8KVbDi77VlHQc3htDy2ZQ7CRd2x+3SijgHF2vB7OafTQ8KVbDi77VlHQc3htDy2ZQ7CRd2x+3RizgHF2vB7OafTg8KVbDi8LZlHwc3htDy2pQ7ChZ2xu3RizgHF2vC7OafTg8KVbDi8LZmHwc3htDy2pQ7ChZ2xu3RizgHF2vC7OafTg8KVbDi8LZmHwc3h9Dy2pQ7ChZ2xu3RizgHGGzC7OafTg8KVbDi8LZmHwc3h9Dy2pQ7ChZ2xu3RizgHGGzC7OafTg8KVbDi8LZmHwc3h9Dy2pQ7ChZ2xu3RizgHGGzC7OafTg8KVbDi8LZmHwc3h9Dy2pQ7ChZ2xu3RizgHGGzC7OafTg8KVbDi8LZmHwc3h9Dy2pQ7ChZ2xu3RizgHGGzC7OafTg8KVbDi8LZmHwc3h9Dy2pQ7ChZ2xu3RizgHGGzC7OafTg8KVbDi8LZmHwc3h9Dy2pQ7ChZ2xu3RizgHGGzC7OafTg8KVbDi8LZmHwc3h9Dy2pQ7ChZ2xu3RizgHGGzC7OafTg8KVbDi8LZmHwc=');
+            audio.volume = 0.3;
+            audio.play().catch(() => {}); // Ignore autoplay errors
+          } catch (e) {
+            // Ignore audio errors
+          }
+        }, 0);
+
+        return null; // Đóng QR modal
+      } else {
+        console.log('[Socket] payment_confirmed: orderId không khớp, giữ nguyên QR modal');
+      }
+
+      return currentQrPayload; // Giữ nguyên nếu orderId không khớp
+    });
+  }, [t]);
 
   const handleStaffJoined = useCallback((payload = {}) => {
     console.log('[Socket] Nhân viên đã tham gia phòng:', payload);

@@ -111,7 +111,7 @@ const getEscalationReply = (language, reason = 'manual_request') => {
   }
   if (reason === 'inventory_not_found') {
     return lang === 'en'
-      ? "I couldn't find that product in our inventory. I'll connect you with a staff member who can check and assist you more accurately."
+      ? "I'm sorry, this item is currently out of stock. Let me connect you with our staff for support."
       : 'Dạ hiện tại em chưa tìm thấy sản phẩm này trong kho. Em sẽ chuyển sang nhân viên thật để kiểm tra và hỗ trợ anh/chị chính xác hơn ạ.';
   }
   return lang === 'en'
@@ -175,6 +175,9 @@ const orderSessions = new Map();
 const latestOrderBySession = new Map();
 const repeatedQuestionState = new Map();
 const sessionLanguages = new Map();
+// Cache kiểm kho: sessionId -> Map<normalizedProductKey, inventoryResult>
+// Ngăn AI gọi lặp check_inventory cho cùng sản phẩm đã xác nhận còn hàng
+const sessionInventoryCache = new Map();
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const REPEATED_QUESTION_LIMIT = Number(process.env.ESCALATION_REPEAT_QUESTION_LIMIT || 2);
 const DEFAULT_ORDER_THRESHOLD_USDC = 100;
@@ -413,12 +416,24 @@ const executeTool = async (name, args = {}, sessionId = null) => {
           if (!args || typeof args.product_name !== 'string' || !args.product_name.trim()) {
             return language === 'en' ? 'Unspecified product' : 'Sản phẩm không xác định';
           }
+
+          // ── Bộ nhớ chống lặp: Nếu đã check và xác nhận còn hàng → trả cache ngay, KHÔNG gọi lại DB
+          if (sessionId) {
+            const cacheKey = normalize(args.product_name);
+            const sessionCache = sessionInventoryCache.get(sessionId);
+            if (sessionCache && sessionCache.has(cacheKey)) {
+              const cached = sessionCache.get(cacheKey);
+              console.log(`[AI Agent] 📦 Cache hit cho check_inventory: "${args.product_name}" (session ${sessionId}) — bỏ qua gọi DB lại`);
+              return JSON.stringify({ ...cached, from_cache: true });
+            }
+          }
+
           const productResult = await checkInventory(args.product_name, language);
           if (productResult && productResult.found) {
             if (productResult.is_summary) {
               return JSON.stringify(productResult);
             }
-            return JSON.stringify({
+            const inventoryPayload = {
               found: true,
               name: productResult.name,
               price_usdc: productResult.price_usdc,
@@ -430,7 +445,19 @@ const executeTool = async (name, args = {}, sessionId = null) => {
               message: language === 'en'
                 ? `Product "${productResult.name}" has ${productResult.stock} units in stock at ${productResult.price_usdc} USDC.`
                 : `Sản phẩm "${productResult.name}" còn ${productResult.stock} chiếc trong kho với giá ${productResult.price_usdc} USDC.`
-            });
+            };
+
+            // Lưu cache để ngăn AI gọi lại check_inventory cho sản phẩm đã xác nhận
+            if (sessionId) {
+              const cacheKey = normalize(args.product_name);
+              if (!sessionInventoryCache.has(sessionId)) {
+                sessionInventoryCache.set(sessionId, new Map());
+              }
+              sessionInventoryCache.get(sessionId).set(cacheKey, inventoryPayload);
+              console.log(`[AI Agent] 💾 Đã cache inventory: "${productResult.name}" cho session ${sessionId}`);
+            }
+
+            return JSON.stringify(inventoryPayload);
           }
           return JSON.stringify({
             found: false,
@@ -450,7 +477,7 @@ const executeTool = async (name, args = {}, sessionId = null) => {
             escalate: true,
             reason: 'inventory_not_found',
             message: language === 'en'
-              ? `Sorry, we couldn't find the product "${args.product_name}" in stock.`
+              ? "I'm sorry, this item is currently out of stock. Let me connect you with our staff for support."
               : `Không thể tạo đơn hàng vì không tìm thấy sản phẩm "${args.product_name}" trong kho.`
           });
         }
@@ -740,7 +767,7 @@ const parseReplyContent = (content) => {
   return { text_reply, function_call };
 };
 
-const getSlidingWindow = (messages, limit = 6) => {
+const getSlidingWindow = (messages, limit = 10) => {
   const systemMsgs = messages.filter(m => m.role === 'system');
   const otherMsgs = messages.filter(m => m.role !== 'system');
   
@@ -950,7 +977,7 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
   try {
     const basePayload = {
       model: modelName,
-      messages: getSlidingWindow(sessionMessages, 6),
+      messages: getSlidingWindow(sessionMessages, 10),
       temperature: 0.4
     };
 
@@ -1099,7 +1126,7 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
       }
       ({ data } = await callChatCompletions(apiUrl, apiKey, {
         model: nextModel,
-        messages: getSlidingWindow(sessionMessages, 6),
+        messages: getSlidingWindow(sessionMessages, 10),
         temperature: 0.4,
         tools: OPENAI_TOOLS,
         tool_choice: 'auto',

@@ -161,7 +161,7 @@ router.get('/:id/check-payment', async (req, res) => {
       };
       console.log(`[Simulate] Đang giả lập thanh toán cho đơn hàng #${id}`);
     } else {
-      verification = await verifyPayment(order.reference, order.amount, order.seller_wallet);
+      verification = await verifyPayment(order);
     }
 
     if (!verification.success) {
