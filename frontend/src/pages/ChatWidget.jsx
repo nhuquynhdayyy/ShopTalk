@@ -409,6 +409,7 @@ function ChatWidget() {
 
   const handleAgentMessage = useCallback((payload = {}) => {
     console.log('[Socket] Nhận tin nhắn từ nhân viên:', payload);
+    setIsStaffConnected(true); // Đảm bảo ẩn thông báo chờ ngay khi có tin nhắn từ agent_message
     const messageId = payload.id || generateId();
     setMessages((current) => {
       if (current.some(m => m.id === messageId)) return current;
@@ -646,7 +647,7 @@ function ChatWidget() {
           </AnimatePresence>
 
           {isTyping && <TypingIndicator />}
-          {isEscalated && <StaffHandoff />}
+          {isEscalated && !isStaffConnected && <StaffHandoff />}
           <div ref={chatEndRef} />
         </div>
 
