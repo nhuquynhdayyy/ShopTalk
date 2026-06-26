@@ -1,5 +1,4 @@
-const fs = require('fs');
-const path = require('path');
+const ProductModel = require('../models/product.model');
 
 // Fuse.js: thư viện tìm kiếm mờ (fuzzy search) - chịu sai chính tả, không phân biệt dấu
 let Fuse;
@@ -10,21 +9,16 @@ try {
   Fuse = null;
 }
 
-const PRODUCTS_FILE_PATH = path.join(__dirname, '../../data/products.json');
-
 /**
- * Đọc toàn bộ danh sách sản phẩm từ file products.json
- * @returns {Array} Danh sách sản phẩm
+ * Đọc toàn bộ danh sách sản phẩm từ database
+ * @returns {Promise<Array>} Danh sách sản phẩm
  */
-const getProducts = () => {
+const getProducts = async () => {
   try {
-    if (!fs.existsSync(PRODUCTS_FILE_PATH)) {
-      return [];
-    }
-    const rawData = fs.readFileSync(PRODUCTS_FILE_PATH, 'utf8');
-    return JSON.parse(rawData);
+    const products = await ProductModel.findAll();
+    return products || [];
   } catch (error) {
-    console.error('Lỗi khi đọc file products.json:', error.message);
+    console.error('Lỗi khi đọc sản phẩm từ database:', error.message);
     return [];
   }
 };
@@ -72,9 +66,9 @@ const isSummaryQuery = (text) => {
  * - Không phân biệt dấu (áo = ao, điện thoại = dien thoai)
  * - Gõ sai chính tả vẫn ra kết quả (ví dụ: "saga phon" → "Solana Mobile Saga Phone")
  * @param {string} productName - Tên sản phẩm cần tìm kiếm
- * @returns {Object|null} Thông tin sản phẩm hoặc null nếu không tìm thấy
+ * @returns {Promise<Object|null>} Thông tin sản phẩm hoặc null nếu không tìm thấy
  */
-const checkInventory = (productName) => {
+const checkInventory = async (productName) => {
   const notFoundResult = {
     found: false,
     message: `Không tìm thấy sản phẩm "${productName || 'này'}" trong kho.`
@@ -84,7 +78,7 @@ const checkInventory = (productName) => {
 
   // Nếu là câu hỏi tổng hợp / so sánh thông tin, trả về toàn bộ danh sách sản phẩm để AI tự so sánh/liệt kê
   if (isSummaryQuery(productName)) {
-    const products = getProducts();
+    const products = await getProducts();
     return {
       found: true,
       is_summary: true,
@@ -98,7 +92,7 @@ const checkInventory = (productName) => {
     };
   }
 
-  const products = getProducts();
+  const products = await getProducts();
   if (!products.length) return notFoundResult;
 
   const searchTerm = normalize(productName.trim());

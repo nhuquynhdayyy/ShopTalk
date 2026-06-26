@@ -7,6 +7,7 @@ const {
   OPENAI_TOOLS,
   executeTool
 } = require('../services/ai.service');
+const { getProducts, checkInventory } = require('../services/inventory.service');
 
 /**
  * 1. Handler tạo Token cho Frontend (Sửa lỗi 404 và ReferenceError)
@@ -69,6 +70,13 @@ const cleanResponse = (groqData) => {
 const detectVoiceOrder = async (messages) => {
   try {
     const recentMessages = messages.filter(m => m.role !== 'system').slice(-30);
+    
+    // Lấy danh sách sản phẩm từ database
+    const products = await getProducts();
+    const productMap = products
+      .map(p => `- "${p.name}": ${p.price_usdc}`)
+      .join('\n');
+    
     const prompt = `Phân tích lịch sử trò chuyện bằng giọng nói giữa khách hàng (user) và trợ lý bán hàng (assistant) để trích xuất thông tin đặt đơn hàng.
 Hãy trả về một đối tượng JSON duy nhất (không có mã markdown hay ký tự thừa nào khác ngoài JSON):
 {
@@ -76,27 +84,15 @@ Hãy trả về một đối tượng JSON duy nhất (không có mã markdown h
   "hasName": <true/false, khách hàng đã cung cấp tên người nhận cụ thể>,
   "hasPhone": <true/false, khách hàng đã cung cấp số điện thoại liên hệ cụ thể>,
   "hasAddress": <true/false, khách hàng đã cung cấp địa chỉ giao hàng cụ thể>,
-  "productName": <tên sản phẩm khách chọn mua, ví dụ "Solana Mobile Saga v2", "Tai nghe TWS Blockchain Edition", hoặc null nếu không rõ>,
-  "amount": <giá sản phẩm (number), ví dụ 0.1, 35, hoặc null nếu không rõ>,
+  "productName": <tên sản phẩm khách chọn mua (chính xác từ danh sách dưới), hoặc null nếu không rõ>,
+  "amount": <giá sản phẩm (number), hoặc null nếu không rõ>,
   "customerName": <tên người nhận đã cung cấp, hoặc null nếu không rõ>,
   "customerPhone": <số điện thoại liên hệ đã cung cấp, hoặc null nếu không rõ>,
   "customerAddress": <địa chỉ giao hàng đã cung cấp, hoặc null nếu không rõ>
 }
 
-Bản đồ sản phẩm & giá mặc định để tham khảo:
-- "Solana Mobile Saga Phone": 0.1
-- "Solana Mobile Saga v2": 0.1
-- "ShopTalk T-Shirt": 0.1
-- "Ốp lưng Saga Phone trong suốt": 8.0
-- "Cáp sạc USB-C 1m": 5.0
-- "Củ sạc nhanh 65W GaN": 18.0
-- "Tai nghe TWS Blockchain Edition": 35.0
-- "Mũ lưỡi trai ShopTalk": 12.0
-- "Áo hoodie Crypto Dev": 28.0
-- "Ledger Nano S Plus": 79.0
-- "Sticker Pack Web3": 3.0
-- "Balo Laptop Crypto": 45.0
-- "Phantom Wallet Keychain": 6.0`;
+Danh sách sản phẩm & giá hiện có trong kho:
+${productMap}`;
 
     const chatCompletion = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',
@@ -118,36 +114,66 @@ Bản đồ sản phẩm & giá mặc định để tham khảo:
 };
 
 /**
- * Hàm fallback phân tích hội thoại voice bằng regex/keywords
+ * Tạo chuỗi danh sách sản phẩm từ database
+ * @returns {Promise<string>} Danh sách sản phẩm formatted cho system prompt
  */
-const fallbackDetectVoiceOrder = (messages) => {
+const generateProductListPrompt = async () => {
+  try {
+    const products = await getProducts();
+    if (!products || products.length === 0) {
+      return '  + Không có sản phẩm trong kho';
+    }
+    
+    return products
+      .map(p => `  + ${p.name}: ${p.price_usdc} USDC`)
+      .join('\n');
+  } catch (error) {
+    console.error('[Agora] Lỗi lấy danh sách sản phẩm:', error.message);
+    return '  + Lỗi tải danh sách sản phẩm';
+  }
+};
+
+/**
+ * Hàm fallback phân tích hội thoại voice bằng regex/keywords và fuzzy search
+ */
+const fallbackDetectVoiceOrder = async (messages) => {
   const allContent = messages.map(m => m.content).join(' ').toLowerCase();
   const hasBuyIntent = allContent.includes('mua') || allContent.includes('đặt hàng') || allContent.includes('chốt') || allContent.includes('chot') || allContent.includes('order');
 
   let customerName = null;
   let customerPhone = null;
   let customerAddress = null;
-  let productName = 'Solana Mobile Saga v2';
-  let amount = 0.1;
+  let productName = null;
+  let amount = null;
 
-  if (allContent.includes('tai nghe')) {
-    productName = 'Tai nghe TWS Blockchain Edition';
-    amount = 35.0;
-  } else if (allContent.includes('ao thun') || allContent.includes('áo thun') || allContent.includes('t-shirt')) {
-    productName = 'ShopTalk T-Shirt';
+  // Tìm sản phẩm từ database bằng fuzzy search
+  try {
+    // Thử tìm từ nội dung hội thoại
+    const products = await getProducts();
+    
+    for (const product of products) {
+      const productNameLower = product.name.toLowerCase();
+      const normalizedName = productNameLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      
+      if (allContent.includes(productNameLower) || 
+          allContent.includes(normalizedName) ||
+          allContent.includes(product.sku.toLowerCase())) {
+        productName = product.name;
+        amount = parseFloat(product.price_usdc);
+        break;
+      }
+    }
+    
+    // Nếu không tìm thấy, dùng sản phẩm đầu tiên làm default
+    if (!productName && products.length > 0) {
+      productName = products[0].name;
+      amount = parseFloat(products[0].price_usdc);
+    }
+  } catch (error) {
+    console.error('[Agora] Lỗi tìm sản phẩm:', error.message);
+    // Fallback
+    productName = 'Sản phẩm mặc định';
     amount = 0.1;
-  } else if (allContent.includes('hoodie')) {
-    productName = 'Áo hoodie Crypto Dev';
-    amount = 28.0;
-  } else if (allContent.includes('op lung') || allContent.includes('ốp lưng')) {
-    productName = 'Ốp lưng Saga Phone trong suốt';
-    amount = 8.0;
-  } else if (allContent.includes('cap sac') || allContent.includes('cáp sạc')) {
-    productName = 'Cáp sạc USB-C 1m';
-    amount = 5.0;
-  } else if (allContent.includes('ledger')) {
-    productName = 'Ledger Nano S Plus';
-    amount = 79.0;
   }
 
   for (let i = 0; i < messages.length - 1; i++) {
@@ -229,6 +255,9 @@ const llmWebhookHandler = async (req, res) => {
       messages.unshift({ role: 'system', content: SYSTEM_PROMPT });
     }
 
+    // Lấy danh sách sản phẩm từ database
+    const productListPrompt = await generateProductListPrompt();
+
     // Thêm instruction voice ngay sau system prompt (index 1)
     messages.splice(1, 0, {
       role: 'system',
@@ -236,19 +265,7 @@ const llmWebhookHandler = async (req, res) => {
 - Trả lời NGẮN GỌN, tối đa 2-3 câu ngắn
 - TUYỆT ĐỐI không viết backtick, markdown, code, tên function như check_inventory hay create_order
 - DANH SÁCH SẢN PHẨM & GIÁ CỦA CỬA HÀNG (TUYỆT ĐỐI nói đúng giá này):
-  + Solana Mobile Saga Phone (Saga v1): 0.1 USDC
-  + Solana Mobile Saga v2: 0.1 USDC
-  + ShopTalk T-Shirt: 0.1 USDC
-  + Ốp lưng Saga Phone trong suốt: 8 USDC
-  + Cáp sạc USB-C 1m: 5 USDC
-  + Củ sạc nhanh 65W GaN: 18 USDC
-  + Tai nghe TWS Blockchain Edition: 35 USDC
-  + Mũ lưỡi trai ShopTalk: 12 USDC
-  + Áo hoodie Crypto Dev: 28 USDC
-  + Ledger Nano S Plus: 79 USDC
-  + Sticker Pack Web3: 3 USDC
-  + Balo Laptop Crypto: 45 USDC
-  + Phantom Wallet Keychain: 6 USDC
+${productListPrompt}
 - Hỏi từng thông tin một, không hỏi cùng lúc: hỏi họ và tên trước, sau đó hỏi số điện thoại, sau đó mới hỏi địa chỉ giao hàng.
 - Chờ khách trả lời xong từng câu rồi mới hỏi thông tin tiếp theo.
 - Quy trình thu thập thông tin khi khách đồng ý mua/chốt đơn:
@@ -264,7 +281,7 @@ const llmWebhookHandler = async (req, res) => {
       allContentLower.includes('dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat');
 
     if (!alreadyCreated) {
-      const fallback = fallbackDetectVoiceOrder(messages);
+      const fallback = await fallbackDetectVoiceOrder(messages);
       let detection = fallback;
 
       if (fallback.hasBuyIntent) {
@@ -275,7 +292,6 @@ const llmWebhookHandler = async (req, res) => {
       }
 
       if (detection && detection !== fallback) {
-        const fallback = fallbackDetectVoiceOrder(messages);
         if (!detection.customerName && fallback.customerName) {
           detection.customerName = fallback.customerName;
           detection.hasName = true;
