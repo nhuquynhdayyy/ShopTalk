@@ -238,12 +238,13 @@ const getSlidingWindow = (messages, limit = 6) => {
  * Tối ưu cho Voice: Trả lời ngắn, không markdown, hỗ trợ Tools
  */
 const llmWebhookHandler = async (req, res) => {
+  let language = 'vi';
   try {
     const { messages: reqMessages, stream } = req.body;
     if (!reqMessages) return res.status(400).json({ error: 'No messages' });
 
     const sessionId = req.query.sessionId || req.body.sessionId || req.body.channel;
-    const language = normalizeLanguage(req.query.language || req.body.language || 'vi');
+    language = normalizeLanguage(req.query.language || req.body.language || 'vi');
 
     if (sessionId) {
       sessionLanguages.set(sessionId, language);
@@ -422,6 +423,86 @@ ${productListPrompt}
       }
 
       if (detection && detection.hasBuyIntent && detection.hasName && detection.hasPhone && detection.hasAddress) {
+        // Kiểm tra địa chỉ có hợp lệ không
+        const isAddressValid = (addr) => {
+          if (!addr) return false;
+          const words = addr.trim().split(/\s+/).filter(Boolean);
+          const normalized = addr.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+          const blacklistPatterns = [/nhu quan/i, /nha quan/i];
+          if (words.length <= 2 || blacklistPatterns.some(p => p.test(normalized))) {
+            return false;
+          }
+          return true;
+        };
+
+        if (!isAddressValid(detection.customerAddress)) {
+          const speakText = 'Dạ anh chị cho em xin địa chỉ cụ thể (số nhà, tên đường) để em tạo đơn nhé';
+          
+          if (sessionId) {
+            const assistantMsgId = 'ai-addr-verify-' + Date.now();
+            const { emitTranscriptReceived } = require('../websocket/socket.server');
+            emitTranscriptReceived({
+              sessionId,
+              sender: 'assistant',
+              transcript: speakText,
+              type: 'voice',
+              id: assistantMsgId
+            });
+          }
+
+          if (stream) {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+
+            const chunk1 = {
+              id: 'voice-addr-verify-' + Date.now(),
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [
+                {
+                  index: 0,
+                  delta: { content: speakText },
+                  finish_reason: null
+                }
+              ]
+            };
+            res.write(`data: ${JSON.stringify(chunk1)}\n\n`);
+
+            const chunk2 = {
+              id: 'voice-addr-verify-' + Date.now(),
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [
+                {
+                  index: 0,
+                  delta: {},
+                  finish_reason: 'stop'
+                }
+              ]
+            };
+            res.write(`data: ${JSON.stringify(chunk2)}\n\n`);
+            res.write('data: [DONE]\n\n');
+            res.end();
+            return;
+          } else {
+            return res.json({
+              id: 'voice-addr-verify-' + Date.now(),
+              object: 'chat.completion',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [{
+                message: { role: 'assistant', content: speakText },
+                index: 0,
+                finish_reason: 'stop'
+              }],
+              usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+            });
+          }
+        }
+
         console.log('[LLM Webhook] Phát hiện đủ thông tin đặt hàng qua voice:', detection);
 
         const detectedProductName = detection.productName || 'Solana Mobile Saga v2';
@@ -635,7 +716,7 @@ ${productListPrompt}
 
       const streamResponse = await groq.chat.completions.create({
         model: 'llama-3.1-8b-instant',
-        messages: getSlidingWindow(messages, 6),
+        messages: getSlidingWindow(messages, 4),
         max_tokens: 100,
         temperature: 0.6,
         stream: true
@@ -670,7 +751,7 @@ ${productListPrompt}
     } else {
       const response = await groq.chat.completions.create({
         model: 'llama-3.1-8b-instant',
-        messages: getSlidingWindow(messages, 6),
+        messages: getSlidingWindow(messages, 4),
         max_tokens: 100,
         temperature: 0.6,
       });
@@ -696,9 +777,19 @@ ${productListPrompt}
   } catch (error) {
     console.error('[LLM Webhook Error]:', error.message);
     if (!res.headersSent) {
-      const fallbackContent = language === 'en'
-        ? 'What product are you interested in today?'
-        : 'Dạ, anh chị đang quan tâm sản phẩm gì ạ?';
+      const isRateLimit = error?.status === 429 || error?.statusCode === 429 || 
+        (error?.message && (
+          error.message.includes('429') || 
+          error.message.includes('Rate limit') || 
+          error.message.includes('rate limit') || 
+          error.message.includes('TPM')
+        ));
+
+      const fallbackContent = isRateLimit
+        ? 'Dạ mạng bên em hơi chậm, anh chị chờ em vài giây nhé'
+        : (language === 'en'
+          ? 'What product are you interested in today?'
+          : 'Dạ, anh chị đang quan tâm sản phẩm gì ạ?');
 
       const currentSessionId = req.query.sessionId || req.body.sessionId || req.body.channel;
       if (currentSessionId) {

@@ -233,6 +233,27 @@ const validateToolArgs = (name, args, language = 'vi') => {
     };
   }
 
+  // Chặn tạo đơn nếu địa chỉ không hợp lệ hoặc nghe nhầm
+  if (name === 'create_order') {
+    const address = args.customer_address || '';
+    const words = address.trim().split(/\s+/).filter(Boolean);
+    const normalized = address.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+    const blacklistPatterns = [/nhu quan/i, /nha quan/i];
+    const isHearError = blacklistPatterns.some(pattern => pattern.test(normalized));
+
+    if (words.length <= 2 || isHearError) {
+      const message = 'Dạ anh chị cho em xin địa chỉ cụ thể (số nhà, tên đường) để em tạo đơn nhé';
+      return {
+        valid: false,
+        result: buildToolValidationError(
+          name,
+          ['customer_address'],
+          message
+        )
+      };
+    }
+  }
+
   return { valid: true };
 };
 
@@ -1648,6 +1669,16 @@ const getSessionHistory = (sessionId) => {
   return chatSessions.get(sessionId);
 };
 
+const addSystemMessageToSession = (sessionId, content) => {
+  if (!sessionId) return;
+  if (!chatSessions.has(sessionId)) {
+    chatSessions.set(sessionId, []);
+  }
+  const messages = chatSessions.get(sessionId);
+  messages.push({ role: 'system', content });
+  console.log(`[AI Agent] 🌐 Session ${sessionId}: added system message "${content}"`);
+};
+
 module.exports = {
   groq,
   chat,
@@ -1662,6 +1693,7 @@ module.exports = {
   activeAgoraAgents,
   triggerAgentSpeak,
   getSessionHistory,
+  addSystemMessageToSession,
   emitEscalationEvent,
   checkEscalation,
   normalizeLanguage,

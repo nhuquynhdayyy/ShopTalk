@@ -34,6 +34,17 @@ const emitOrderPaid = (order) => {
   };
 
   emitSocketEvent('payment_confirmed', { orderId: order.id });
+
+  try {
+    const { orderSessions, addSystemMessageToSession } = require('../services/ai.service');
+    const sessionId = orderSessions.get(order.id);
+    if (sessionId) {
+      addSystemMessageToSession(sessionId, 'Đơn hàng đã được thanh toán thành công. Bạn không cần hỏi địa chỉ hay thông tin gì nữa, hãy cảm ơn và chào khách.');
+    }
+  } catch (err) {
+    console.error('[SocketServer] Error syncing paid status to session:', err.message);
+  }
+
   return emitSocketEvent('order_paid', payload);
 };
 
