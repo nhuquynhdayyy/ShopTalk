@@ -50,14 +50,20 @@ const createMockQrImage = () => {
   return `data:image/svg+xml;base64,${window.btoa(svg)}`;
 };
 
-const buildMockChatResponse = (message, sessionId, t) => {
+const buildMockChatResponse = (message, sessionId, t, currentLang = 'vi') => {
   const normalized = message.toLowerCase();
-  const wantsHuman = ['gặp', 'nhân viên', 'người thật', 'chủ shop', 'khiếu nại', 'support'].some((keyword) => (
-    normalized.includes(keyword)
-  ));
-  const wantsToBuy = ['mua', 'thanh toán', 'qr', 'chốt', 'đặt hàng', 'tai nghe'].some((keyword) => (
-    normalized.includes(keyword)
-  ));
+  const isEn = currentLang?.startsWith('en');
+
+  const humanKeywords = isEn
+    ? ['meet', 'human', 'staff', 'owner', 'manager', 'support', 'complaint', 'real person', 'live agent', 'gặp', 'nhân viên', 'người thật', 'chủ shop', 'khiếu nại']
+    : ['gặp', 'nhân viên', 'người thật', 'chủ shop', 'khiếu nại', 'support'];
+
+  const buyKeywords = isEn
+    ? ['buy', 'purchase', 'order', 'headphones', 'headset', 't-shirt', 'tshirt', 'checkout', 'pay', 'mua', 'thanh toán', 'qr', 'chốt', 'đặt hàng', 'tai nghe']
+    : ['mua', 'thanh toán', 'qr', 'chốt', 'đặt hàng', 'tai nghe'];
+
+  const wantsHuman = humanKeywords.some((keyword) => normalized.includes(keyword));
+  const wantsToBuy = buyKeywords.some((keyword) => normalized.includes(keyword));
 
   if (wantsHuman) {
     return {
@@ -72,11 +78,19 @@ const buildMockChatResponse = (message, sessionId, t) => {
 
   if (wantsToBuy) {
     const orderId = generateId();
+    const isHeadphones = isEn
+      ? (normalized.includes('headphone') || normalized.includes('headset') || normalized.includes('tai nghe') || normalized.includes('earbud'))
+      : normalized.includes('tai nghe');
+
+    const productName = isHeadphones
+      ? t('products.Tai nghe Bluetooth ShopTalk', 'Tai nghe Bluetooth ShopTalk')
+      : t('products.Áo thun ShopTalk Essential', 'Áo thun ShopTalk Essential');
+
     const order = {
       id: orderId,
       reference: 'mock-solana-pay-reference',
-      product_name: normalized.includes('tai nghe') ? 'Tai nghe Bluetooth ShopTalk' : 'Áo thun ShopTalk Essential',
-      amount: normalized.includes('tai nghe') ? 32 : 18,
+      product_name: productName,
+      amount: isHeadphones ? 32 : 18,
       seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
       status: 'pending',
       created_at: new Date().toISOString(),
@@ -365,12 +379,12 @@ function ChatWidget() {
     return {
       ...order,
       id: order.id || order.orderId || payload.orderId || qrPayload?.order?.id,
-      product_name: order.product_name || order.productName || qrPayload?.order?.product_name || 'Don hang ShopTalk',
+      product_name: order.product_name || order.productName || qrPayload?.order?.product_name || t('components.order.default_product', 'Đơn hàng ShopTalk'),
       amount: order.amount || qrPayload?.order?.amount || 0,
       seller_wallet: order.seller_wallet || order.sellerWallet || qrPayload?.order?.seller_wallet,
       status: 'paid'
     };
-  }, [qrPayload]);
+  }, [qrPayload, t]);
 
   const handleTranscriptReceived = useCallback((payload = {}) => {
     const transcriptSessionId = payload.session_id || payload.sessionId;
@@ -424,7 +438,7 @@ function ChatWidget() {
         id: `paid-${paidOrder.id || Date.now()}`,
         role: 'assistant',
         content: t('chat.system.paid_success', '{{product}} đã thanh toán thành công{{amountText}}.', {
-          product: paidOrder.product_name || 'Đơn hàng ShopTalk',
+          product: paidOrder.product_name || t('components.order.default_product', 'Đơn hàng ShopTalk'),
           amountText: paidOrder.amount ? ` ${Number(paidOrder.amount).toFixed(2)} USDC` : ''
         })
       }
@@ -556,7 +570,7 @@ function ChatWidget() {
         }
         setIsMockMode(false);
       } catch (_) {
-        response = buildMockChatResponse(text, sessionId || generateId(), t);
+        response = buildMockChatResponse(text, sessionId || generateId(), t, currentLang);
         setIsMockMode(true);
       }
 

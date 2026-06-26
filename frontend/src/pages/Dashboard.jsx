@@ -80,13 +80,13 @@ const mergeOrder = (orders, incomingOrder) => {
   return sortOrders([merged, ...rest]);
 };
 
-const normalizePaidOrder = (payload = {}) => {
+const normalizePaidOrder = (payload = {}, t) => {
   const order = payload.order || payload.data || payload;
 
   return {
     ...order,
     id: order.id || order.orderId || payload.orderId,
-    product_name: order.product_name || order.productName || 'Don hang ShopTalk',
+    product_name: order.product_name || order.productName || (t ? t('components.order.default_product', 'Đơn hàng ShopTalk') : 'Don hang ShopTalk'),
     amount: order.amount || 0,
     status: 'paid',
     tx_signature: order.tx_signature || order.txSignature || null,
@@ -95,9 +95,10 @@ const normalizePaidOrder = (payload = {}) => {
   };
 };
 
-const formatTimestamp = (timestamp) => {
+const formatTimestamp = (timestamp, lng = 'vi-VN') => {
   try {
-    return new Intl.DateTimeFormat('vi-VN', {
+    const locale = lng?.startsWith('vi') ? 'vi-VN' : 'en-US';
+    return new Intl.DateTimeFormat(locale, {
       hour: '2-digit',
       minute: '2-digit',
       day: '2-digit',
@@ -199,9 +200,9 @@ function Dashboard() {
   }, [playChime, t, currentLang]);
 
   const handleOrderPaid = useCallback((payload) => {
-    const paidOrder = normalizePaidOrder(payload);
+    const paidOrder = normalizePaidOrder(payload, t);
     handleOrderStatusUpdated(paidOrder);
-  }, [handleOrderStatusUpdated]);
+  }, [handleOrderStatusUpdated, t]);
 
   const handleEscalationRequest = useCallback((payload) => {
     const escalation = {
@@ -306,7 +307,7 @@ function Dashboard() {
       console.log('[Socket] Gửi accept_escalation cho session:', targetSessionId);
       socket.emit('accept_escalation', {
         sessionId: targetSessionId,
-        staffName: 'Chủ shop'
+        staffName: t('dashboard.live_chat.merchant_name', 'Chủ shop')
       });
     }
 
@@ -438,7 +439,7 @@ function Dashboard() {
                   </p>
                   <p className="mt-1 text-sm text-amber-900">{item.message}</p>
                   <p className="mt-1 text-xs text-amber-700">
-                    {t('dashboard.escalation.session', 'Session')} {item.sessionId || t('dashboard.escalation.unknown', 'không rõ')} · {formatTimestamp(item.timestamp)}
+                    {t('dashboard.escalation.session', 'Session')} {item.sessionId || t('dashboard.escalation.unknown', 'không rõ')} · {formatTimestamp(item.timestamp, i18n.language)}
                   </p>
                 </div>
                 <button

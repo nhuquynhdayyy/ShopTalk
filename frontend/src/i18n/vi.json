@@ -7,6 +7,9 @@
     "lang_switch": {
       "title": "Đổi ngôn ngữ trong cuộc gọi?",
       "message": "Cuộc gọi voice hiện tại sẽ kết thúc và bắt đầu lại bằng ngôn ngữ mới. Bạn có muốn tiếp tục?",
+      "message_dynamic": "Bạn có muốn chuyển sang ngôn ngữ {{lang}} và khởi động lại cuộc gọi không?",
+      "english_label": "Tiếng Anh",
+      "vietnamese_label": "Tiếng Việt",
       "confirm": "Xác nhận",
       "cancel": "Huỷ"
     }
@@ -105,6 +108,7 @@
       "close": "Đóng",
       "customer": "Khách hàng",
       "merchant": "Bạn (Chủ shop)",
+      "merchant_name": "Chủ shop",
       "placeholder": "Nhập câu trả lời...",
       "send": "Gửi"
     }

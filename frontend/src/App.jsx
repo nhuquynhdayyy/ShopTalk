@@ -77,6 +77,10 @@ function AppContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const targetLanguageLabel = pendingLanguage === 'en' 
+    ? t('app.lang_switch.english_label', 'Tiếng Anh') 
+    : t('app.lang_switch.vietnamese_label', 'Tiếng Việt');
+
   return (
     <Router>
       <div className="min-h-screen bg-slate-100 text-slate-950">
@@ -101,8 +105,8 @@ function AppContent() {
                     className={({ isActive }) => (
                       `flex-1 rounded-md px-4 py-2 text-center text-sm font-semibold transition lg:flex-none ${
                         isActive
-                          ? 'bg-white text-teal-700 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-950'
+                           ? 'bg-white text-teal-700 shadow-sm'
+                           : 'text-slate-600 hover:text-slate-950'
                       }`
                     )}
                   >
@@ -156,7 +160,7 @@ function AppContent() {
       <ConfirmModal
         isOpen={Boolean(pendingLanguage)}
         title={t('app.lang_switch.title', 'Đổi ngôn ngữ trong cuộc gọi?')}
-        message={t('app.lang_switch.message', 'Cuộc gọi voice hiện tại sẽ kết thúc và bắt đầu lại bằng ngôn ngữ mới. Bạn có muốn tiếp tục?')}
+        message={t('app.lang_switch.message_dynamic', 'Bạn có muốn chuyển sang ngôn ngữ {{lang}} và khởi động lại cuộc gọi không?', { lang: targetLanguageLabel })}
         confirmLabel={t('app.lang_switch.confirm', 'Xác nhận')}
         cancelLabel={t('app.lang_switch.cancel', 'Huỷ')}
         onConfirm={handleConfirmLanguageSwitch}
