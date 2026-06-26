@@ -264,11 +264,17 @@ function Dashboard() {
     setIsOffRampOpen(true);
   };
 
-  const handleCompleteOffRamp = (order) => {
+  const handleCompleteOffRamp = async (order) => {
     if (!order?.id) return;
 
+    try {
+      await api.withdrawOrder(order.id);
+    } catch (error) {
+      console.error('[Dashboard] Lỗi khi gọi API withdraw:', error.message);
+    }
+
     setOrders((current) => current.map((item) => (
-      item.id === order.id ? { ...item, offramped: true } : item
+      item.id === order.id ? { ...item, offramped: true, isWithdrawn: true } : item
     )));
   };
 

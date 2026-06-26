@@ -262,6 +262,28 @@ const markPaymentReminderSent = async (id) => {
   }
 };
 
+/**
+ * Cập nhật trạng thái rút tiền (is_withdrawn) của đơn hàng theo ID
+ * @param {string} id - UUID của đơn hàng
+ * @param {boolean} [isWithdrawn=true] - Trạng thái rút tiền mới
+ * @returns {Promise<Object|null>} Đơn hàng đã cập nhật hoặc null
+ */
+const updateOrderWithdrawalStatus = async (id, isWithdrawn = true) => {
+  const queryText = `
+    UPDATE orders 
+    SET is_withdrawn = $2
+    WHERE id = $1
+    RETURNING *;
+  `;
+  try {
+    const res = await db.query(queryText, [id, isWithdrawn]);
+    return res.rows[0] || null;
+  } catch (error) {
+    console.error(`Lỗi trong updateOrderWithdrawalStatus với ID ${id}:`, error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   createOrder,
   getOrderById,
@@ -273,6 +295,7 @@ module.exports = {
   getExpiredPendingOrders,
   getPaymentReminderCandidates,
   markPaymentReminderSent,
+  updateOrderWithdrawalStatus,
 };
 
 

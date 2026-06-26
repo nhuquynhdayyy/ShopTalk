@@ -74,6 +74,19 @@ const getOrderById = (orderId) => (
   tryEndpoints('get', [`/api/orders/${orderId}`, `/orders/${orderId}`])
 );
 
+const withdrawOrder = async (orderId) => {
+  try {
+    const response = await http.patch(`/orders/${orderId}/withdraw`);
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      const response = await http.patch(`/api/orders/${orderId}/withdraw`);
+      return response.data;
+    }
+    throw error;
+  }
+};
+
 export default {
   http,
   sendChatMessage,
@@ -82,5 +95,6 @@ export default {
   getAgoraToken,
   startAgoraAgent,
   getOrderById,
+  withdrawOrder,
   API_BASE_URL
 };

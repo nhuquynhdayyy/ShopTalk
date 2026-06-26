@@ -88,6 +88,7 @@ async function runMigration() {
         customer_address TEXT,
         items_list JSONB,
         payment_reminded_at TIMESTAMP WITH TIME ZONE,
+        is_withdrawn BOOLEAN DEFAULT false,
         CONSTRAINT chk_status CHECK (status IN ('pending', 'paid', 'expired', 'payment_mismatch'))
       );
 
@@ -96,6 +97,7 @@ async function runMigration() {
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_address TEXT;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS items_list JSONB;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_reminded_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_withdrawn BOOLEAN DEFAULT false;
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_tx_signature_unique
         ON orders (tx_signature)

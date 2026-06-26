@@ -39,7 +39,7 @@ function OrderCard({ order, onOfframp }) {
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <StatusBadge status={order.status} />
             <span className="text-xs font-medium text-slate-500">{formatDate(order.created_at)}</span>
-            {order.offramped && (
+            {(order.offramped || order.isWithdrawn || order.is_withdrawn || order.offRampStatus === 'completed') && (
               <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700">
                 Đã rút VND
               </span>
@@ -103,14 +103,15 @@ function OrderCard({ order, onOfframp }) {
             <p className="text-xl font-semibold text-slate-950">{amount.toFixed(2)} USDC</p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onOfframp(order)}
-            disabled={order.status !== 'paid'}
-            className="h-10 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
-          >
-            Rút VND
-          </button>
+          {order.status === 'paid' && !(order.offramped || order.isWithdrawn || order.is_withdrawn || order.offRampStatus === 'completed') && (
+            <button
+              type="button"
+              onClick={() => onOfframp(order)}
+              className="h-10 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white transition hover:bg-teal-700"
+            >
+              Rút VND
+            </button>
+          )}
         </div>
       </div>
     </motion.article>
