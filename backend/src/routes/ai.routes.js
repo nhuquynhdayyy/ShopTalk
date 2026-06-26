@@ -11,8 +11,9 @@ const { chat, generateAgoraToken, startAgoraAgent, getSessionHistory } = require
  */
 router.post('/chat', async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, language: bodyLanguage } = req.body;
     let { sessionId } = req.body;
+    const language = bodyLanguage || 'vi';
 
     if (!message) {
       return res.status(400).json({
@@ -27,7 +28,7 @@ router.post('/chat', async (req, res) => {
     }
 
     // Gọi service xử lý hội thoại với LLM / Mock
-    const result = await chat(sessionId, message);
+    const result = await chat(sessionId, message, language);
 
     return res.status(200).json({
       success: true,
@@ -48,6 +49,21 @@ router.post('/chat', async (req, res) => {
       error: 'Lỗi hệ thống khi xử lý hội thoại với AI Sales Agent'
     });
   }
+});
+
+const { removeLiveHandoffSession } = require('../websocket/socket.server');
+
+/**
+ * Route: POST /reset-session
+ * Mô tả: Xóa trạng thái handoff để AI có thể trả lời lại (khi user bấm Refresh).
+ * Body: { sessionId }
+ */
+router.post('/reset-session', (req, res) => {
+  const { sessionId } = req.body || {};
+  if (sessionId) {
+    removeLiveHandoffSession(sessionId);
+  }
+  return res.status(200).json({ success: true });
 });
 
 /**

@@ -38,7 +38,7 @@ const tryEndpoints = async (method, endpoints, payload) => {
  * @param {number|string} uid 
  */
 const getAgoraToken = async (channelName, uid) => {
-  const response = await api.post('/agora/token', { channelName, uid });
+  const response = await http.post('/api/agora/token', { channelName, uid });
   return response.data;
 };
 
@@ -50,8 +50,8 @@ const getAgoraToken = async (channelName, uid) => {
  */
 const startAgoraAgent = async (channelName, language = 'vi', sessionId = null) => {
   // Sinh UID ngẫu nhiên cho Agent (giả sử 999)
-  const response = await api.post('/agora/start-agent', { 
-    channelName, 
+  const response = await http.post('/api/ai/start-agent', {
+    channelName,
     agentUid: 999,
     language,
     sessionId
@@ -66,12 +66,15 @@ const getChatHistory = (sessionId) => (
   tryEndpoints('get', [`/api/ai/history/${sessionId}`, `/ai/history/${sessionId}`])
 );
 
-const getOrders = () => (
-  tryEndpoints('get', ['/api/orders', '/orders'])
+const getOrders = (language = 'vi') => (
+  tryEndpoints('get', [`/api/orders?language=${encodeURIComponent(language)}`, `/orders?language=${encodeURIComponent(language)}`])
 );
 
-const getOrderById = (orderId) => (
-  tryEndpoints('get', [`/api/orders/${orderId}`, `/orders/${orderId}`])
+const getOrderById = (orderId, language = 'vi') => (
+  tryEndpoints('get', [
+    `/api/orders/${orderId}?language=${encodeURIComponent(language)}`,
+    `/orders/${orderId}?language=${encodeURIComponent(language)}`
+  ])
 );
 
 const withdrawOrder = async (orderId) => {

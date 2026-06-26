@@ -131,6 +131,8 @@ const addLiveHandoffSession = (sessionId, reason = 'system') => {
   return true;
 };
 
+const removeLiveHandoffSession = (sessionId) => liveHandoffSessions.delete(sessionId);
+
 /**
  * Khởi tạo Socket.io Server gắn liền với HTTP Server
  * @param {Object} server - Instance của HTTP server Express
@@ -202,6 +204,7 @@ module.exports = {
   handleLiveMessage,
   isSessionInHandoff,
   addLiveHandoffSession,
+  removeLiveHandoffSession,
   __setIoForTest,
   __resetLiveHandoffForTest
 };

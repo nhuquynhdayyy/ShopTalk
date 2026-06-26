@@ -55,15 +55,11 @@ const getReviewsToolDefinition = {
         },
         limit: {
           type: "number",
-          description: "Số lượng reviews muốn lấy (mặc định 3, tối đa 5)",
-          default: 3,
+          description: "Số lượng reviews muốn lấy (mặc định 3, tối đa 5)"
         },
         min_rating: {
           type: "number",
-          minimum: 1,
-          maximum: 5,
-          description: "Chỉ lấy reviews có rating >= giá trị này (mặc định 1 = lấy tất cả)",
-          default: 1,
+          description: "Chỉ lấy reviews có rating >= giá trị này (1-5, mặc định 1)"
         },
       },
       required: ["product_sku"],

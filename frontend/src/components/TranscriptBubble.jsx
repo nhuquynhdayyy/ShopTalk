@@ -1,16 +1,21 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 
-const senderLabels = {
-  user: 'Khach hang',
-  ai: 'AI',
-  assistant: 'AI',
-  agent: 'Nhan vien'
+const senderKeyByRole = {
+  user: 'customer',
+  ai: 'agent',
+  assistant: 'agent',
+  agent: 'staff',
+  staff: 'staff'
 };
 
 function TranscriptBubble({ message }) {
+  const { t } = useTranslation();
   const isCustomer = message.role === 'user' || message.sender === 'user';
   const sender = message.sender || (message.role === 'assistant' ? 'ai' : message.role);
+  const senderKey = senderKeyByRole[sender] || 'agent';
+  const senderLabel = t(`components.transcript.senders.${senderKey}`, senderKey);
 
   return (
     <motion.div
@@ -34,7 +39,7 @@ function TranscriptBubble({ message }) {
           <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current/30">
             <span className="h-2.5 w-1.5 rounded-full border border-current" />
           </span>
-          Voice transcript - {senderLabels[sender] || senderLabels.ai}
+          {t('components.transcript.label', 'Voice transcript')} - {senderLabel}
         </div>
         <p>{message.content}</p>
       </div>

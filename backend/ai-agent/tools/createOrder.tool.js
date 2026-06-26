@@ -21,7 +21,7 @@ module.exports = {
         },
         seller_wallet: {
           type: "string",
-          description: "Địa chỉ ví nhận tiền của người bán. Mặc định là: 5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ"
+          description: "Địa chỉ ví nhận tiền của người bán (tùy chọn — hệ thống tự điền nếu bỏ trống)."
         },
         customer_name: {
           type: "string",
@@ -34,23 +34,9 @@ module.exports = {
         customer_address: {
           type: "string",
           description: "Địa chỉ giao nhận hàng của khách hàng."
-        },
-        items_list: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              name: { type: "string" },
-              quantity: { type: "number" },
-              price_usdc: { type: "number" }
-            },
-            required: ["name", "quantity", "price_usdc"]
-          },
-          description: "Danh sách chi tiết các sản phẩm được mua trong đơn."
         }
       },
-      required: ["product_name", "amount", "seller_wallet", "customer_name", "customer_phone", "customer_address"]
+      required: ["product_name", "amount", "customer_name", "customer_phone", "customer_address"]
     }
   }
 };

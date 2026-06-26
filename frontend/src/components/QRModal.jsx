@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
+import { localizeProductName } from '../utils/localizeProductName';
 
 function QRModal({ isOpen, onClose, qrCodeImage, order }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLang = i18n.language?.startsWith('vi') ? 'vi' : 'en';
+  const displayProductName = localizeProductName(
+    order?.canonical_product_name || order?.product_name,
+    currentLang
+  );
   const [copied, setCopied] = useState(false);
 
   const shorten = (value) => {
@@ -75,7 +81,7 @@ function QRModal({ isOpen, onClose, qrCodeImage, order }) {
               <div className="flex items-start justify-between gap-4">
                 <dt className="text-slate-500">{t('components.qr_modal.product', 'Sản phẩm')}</dt>
                 <dd className="text-right font-semibold text-slate-950">
-                  {order?.product_name || t('components.qr_modal.default_product', 'Đơn hàng ShopTalk')}
+                  {displayProductName || t('components.qr_modal.default_product', 'Đơn hàng ShopTalk')}
                 </dd>
               </div>
               <div className="flex items-start justify-between gap-4">

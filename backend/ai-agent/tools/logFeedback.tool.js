@@ -35,9 +35,7 @@ const logFeedbackToolDefinition = {
         },
         rating: {
           type: "number",
-          minimum: 1,
-          maximum: 5,
-          description: "Điểm đánh giá từ 1–5 (nếu khách có cho điểm)",
+          description: "Điểm đánh giá từ 1–5 (nếu khách có cho điểm)"
         },
       },
       required: ["feedback_type", "content"],
