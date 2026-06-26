@@ -181,13 +181,20 @@ const fallbackDetectVoiceOrder = async (messages) => {
     const next = messages[i + 1];
     if (current.role === 'assistant' && next.role === 'user') {
       const currentLower = current.content.toLowerCase();
+      let matched = false;
+
       if (currentLower.includes('tên người nhận') || currentLower.includes('cho em biết tên') || currentLower.includes('xin tên') || currentLower.includes('họ và tên')) {
         customerName = next.content.replace(/tên (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+        matched = true;
       }
       if (currentLower.includes('số điện thoại') || currentLower.includes('sđt') || currentLower.includes('so dien thoai') || currentLower.includes('sdt') || currentLower.includes('liên hệ')) {
-        customerPhone = next.content.replace(/số điện thoại (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+        const phoneCleaned = next.content.replace(/số điện thoại (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+        if (!matched || /\d+/.test(phoneCleaned)) {
+          customerPhone = phoneCleaned;
+          matched = true;
+        }
       }
-      if (currentLower.includes('địa chỉ') || currentLower.includes('cho em biết địa chỉ') || currentLower.includes('xin địa chỉ') || currentLower.includes('giao hàng')) {
+      if (!matched && (currentLower.includes('địa chỉ') || currentLower.includes('cho em biết địa chỉ') || currentLower.includes('xin địa chỉ') || currentLower.includes('giao hàng'))) {
         customerAddress = next.content.replace(/địa chỉ (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
       }
     }
@@ -300,7 +307,7 @@ ${productListPrompt}
           detection.customerPhone = fallback.customerPhone;
           detection.hasPhone = true;
         }
-        if (!detection.customerAddress && fallback.customerAddress) {
+        if (!detection.customerAddress && fallback.customerAddress && fallback.customerAddress !== detection.customerName) {
           detection.customerAddress = fallback.customerAddress;
           detection.hasAddress = true;
         }

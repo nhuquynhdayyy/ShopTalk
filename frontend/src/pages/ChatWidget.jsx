@@ -12,7 +12,7 @@ const mockMessages = [
   {
     id: 'mock-welcome',
     role: 'assistant',
-    content: 'Dạ, ShopTalk xin chào anh/chị! Em là nhân viên tư vấn ảo của cửa hàng. Anh chị đang quan tâm đến mẫu điện thoại Solana Saga hay phụ kiện nào bên em ạ?'
+    content: 'Dạ, ShopTalk xin chào anh/chị! Em là Mia, nhân viên tư vấn thời trang của shop. Hôm nay anh chị đang tìm kiểu gì ạ — đi chơi, đi làm, hay mặc nhà?'
   }
 ];
 
@@ -264,10 +264,10 @@ function ChatBubble({ message, onShowQr }) {
       )}
       <div
         className={`max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm ${isUser
-            ? 'rounded-br-sm bg-teal-600 text-white'
-            : isStaff
-              ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-950'
-              : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
+          ? 'rounded-br-sm bg-teal-600 text-white'
+          : isStaff
+            ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-950'
+            : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
           }`}
       >
         {isUser ? message.content : parseMessageContent(message.content, onShowQr)}
@@ -497,7 +497,7 @@ function ChatWidget() {
         ...current,
         { id: messageId, role: 'user', content: text }
       ]);
-      
+
       if (socket) {
         socket.emit('live_message', {
           sessionId,
