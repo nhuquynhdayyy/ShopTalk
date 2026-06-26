@@ -220,6 +220,25 @@ const fallbackDetectVoiceOrder = async (messages) => {
   };
 };
 
+const getSlidingWindow = (messages, limit = 6) => {
+  const systemMsgs = messages.filter(m => m.role === 'system');
+  const otherMsgs = messages.filter(m => m.role !== 'system');
+  
+  if (otherMsgs.length <= limit) {
+    return messages;
+  }
+  
+  let startIndex = otherMsgs.length - limit;
+  while (startIndex > 0 && otherMsgs[startIndex].role === 'tool') {
+    startIndex--;
+  }
+  if (startIndex > 0 && otherMsgs[startIndex - 1].tool_calls) {
+    startIndex--;
+  }
+  
+  return [...systemMsgs, ...otherMsgs.slice(startIndex)];
+};
+
 /**
  * Handler xử lý Webhook từ Agora Conversational AI
  * Tối ưu cho Voice: Trả lời ngắn, không markdown, hỗ trợ Tools
@@ -231,17 +250,93 @@ const llmWebhookHandler = async (req, res) => {
 
     const sessionId = req.query.sessionId || req.body.sessionId || req.body.channel;
 
+    // 0. Kiểm tra nếu cuộc trò chuyện đã chuyển giao sang người thật (Handoff)
+    const { isSessionInHandoff } = require('../websocket/socket.server');
+    if (typeof isSessionInHandoff === 'function' && isSessionInHandoff(sessionId)) {
+      console.log(`[Agora Webhook] 🛑 Chặn AI Voice trả lời cho sessionId: ${sessionId} (đang trong chế độ người thật hỗ trợ)`);
+      return res.status(200).json({ error: 'Session is in handoff' });
+    }
+
     // Emit user's transcript immediately to the chat screen
-    if (sessionId) {
-      const lastUserMsg = [...reqMessages].reverse().find(msg => msg.role === 'user');
-      if (lastUserMsg && lastUserMsg.content) {
+    const lastUserMsg = [...reqMessages].reverse().find(msg => msg.role === 'user');
+    if (sessionId && lastUserMsg && lastUserMsg.content) {
+      const { emitTranscriptReceived } = require('../websocket/socket.server');
+      emitTranscriptReceived({
+        sessionId,
+        sender: 'user',
+        transcript: lastUserMsg.content,
+        type: 'voice',
+        id: 'user-' + Date.now()
+      });
+    }
+
+    // 1. Kiểm tra logic Escalation ngay trước khi gửi LLM
+    const { checkEscalation, emitEscalationEvent } = require('../services/ai.service');
+    if (lastUserMsg && lastUserMsg.content && checkEscalation(lastUserMsg.content)) {
+      emitEscalationEvent(sessionId, lastUserMsg.content, 'manual_request');
+      const speakText = "Dạ em xin lỗi vì sự bất tiện này. Em sẽ chuyển ngay cuộc trò chuyện này sang nhân viên hỗ trợ để xử lý nhanh nhất cho mình ạ! 🙏";
+      
+      if (sessionId) {
+        const assistantMsgId = 'ai-escalate-' + Date.now();
         const { emitTranscriptReceived } = require('../websocket/socket.server');
         emitTranscriptReceived({
           sessionId,
-          sender: 'user',
-          transcript: lastUserMsg.content,
+          sender: 'assistant',
+          transcript: speakText,
           type: 'voice',
-          id: 'user-' + Date.now()
+          id: assistantMsgId
+        });
+      }
+
+      if (stream) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        const chunk1 = {
+          id: 'voice-escalate-' + Date.now(),
+          object: 'chat.completion.chunk',
+          created: Math.floor(Date.now() / 1000),
+          model: 'llama-3.1-8b-instant',
+          choices: [
+            {
+              index: 0,
+              delta: { content: speakText },
+              finish_reason: null
+            }
+          ]
+        };
+        res.write(`data: ${JSON.stringify(chunk1)}\n\n`);
+
+        const chunk2 = {
+          id: 'voice-escalate-' + Date.now(),
+          object: 'chat.completion.chunk',
+          created: Math.floor(Date.now() / 1000),
+          model: 'llama-3.1-8b-instant',
+          choices: [
+            {
+              index: 0,
+              delta: {},
+              finish_reason: 'stop'
+            }
+          ]
+        };
+        res.write(`data: ${JSON.stringify(chunk2)}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      } else {
+        return res.json({
+          id: 'voice-escalate-' + Date.now(),
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: 'llama-3.1-8b-instant',
+          choices: [{
+            message: { role: 'assistant', content: speakText },
+            index: 0,
+            finish_reason: 'stop'
+          }],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
         });
       }
     }
@@ -279,7 +374,9 @@ ${productListPrompt}
   1. Hỏi họ và tên: "Dạ anh/chị cho em xin họ và tên người nhận ạ?"
   2. Sau khi có tên, hỏi số điện thoại: "Dạ anh/chị cho em xin số điện thoại liên hệ ạ?"
   3. Sau khi có số điện thoại, hỏi địa chỉ giao hàng: "Dạ anh/chị cho em xin địa chỉ giao hàng ạ?"
-- Khi đã nhận đủ cả 3 thông tin (Họ tên + Số điện thoại + Địa chỉ), Trợ lý ảo sẽ dừng lại để hệ thống tạo đơn hàng.`
+- BẮT BUỘC phải thu thập đủ 3 thông tin: Họ tên, Số điện thoại, Địa chỉ giao hàng mới được phép nói câu "Em sẽ tạo đơn hàng" hoặc gọi công cụ tạo đơn hàng.
+- Nếu khách mới đưa tên và địa chỉ, bạn PHẢI hỏi tiếp: "Cho em xin số điện thoại để shipper liên lạc nhé?" trước khi thực hiện các bước tiếp theo.
+- Tuyệt đối không được tự bịa (hallucinate) ra việc đã gửi mã QR hoặc tạo đơn thành công khi thông tin chưa đầy đủ.`
     });
 
     // Kiểm tra xem khách đã đặt đơn chưa để tránh duplicate order
@@ -316,58 +413,132 @@ ${productListPrompt}
       if (detection && detection.hasBuyIntent && detection.hasName && detection.hasPhone && detection.hasAddress) {
         console.log('[LLM Webhook] Phát hiện đủ thông tin đặt hàng qua voice:', detection);
 
-        const { createOrder } = require('../models/order.model');
-        const { createPaymentRequest, generateQRCode } = require('../services/solanaPay.service');
-        const { Keypair } = require('@solana/web3.js');
-
-        const referenceKey = Keypair.generate().publicKey.toBase58();
         const detectedProductName = detection.productName || 'Solana Mobile Saga v2';
         const detectedAmount = detection.amount || 0.1;
         const detectedName = detection.customerName || 'Khách mua qua Voice';
         const detectedPhone = detection.customerPhone || 'Chưa cung cấp';
         const detectedAddress = detection.customerAddress || 'Chưa cung cấp';
 
-        // Tạo đơn hàng
-        const order = await createOrder({
-          reference: referenceKey,
+        // Gọi executeTool để dùng chung logic và validation với Chat (check inventory, check high-value order, map session)
+        const { executeTool } = require('../services/ai.service');
+        const toolResultStr = await executeTool('create_order', {
           product_name: detectedProductName,
           amount: detectedAmount,
-          seller_wallet: process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ',
-          status: 'pending',
           customer_name: detectedName,
           customer_phone: detectedPhone,
           customer_address: detectedAddress
-        });
+        }, sessionId);
 
-        if (order && sessionId) {
-          const { orderSessions } = require('../services/ai.service');
-          orderSessions.set(order.id, sessionId);
-          console.log(`[Agora Webhook] Mapped voice order ID ${order.id} to session ID ${sessionId}`);
+        const result = JSON.parse(toolResultStr);
+
+        if (!result.success) {
+          console.log('[LLM Webhook] Tạo đơn hàng qua Voice thất bại hoặc cần chuyển giao:', result);
+          let speakText = result.message || 'Dạ hiện tại không thể tạo đơn hàng này.';
+          let escalate = false;
+          let escalationReason = 'tool_escalation';
+
+          if (result.escalate) {
+            escalate = true;
+            escalationReason = result.reason || 'tool_escalation';
+            if (result.reason === 'inventory_not_found') {
+              speakText = 'Dạ hiện tại em chưa tìm thấy sản phẩm này trong kho. Em sẽ chuyển sang nhân viên thật để kiểm tra và hỗ trợ anh/chị chính xác hơn ạ.';
+            } else if (result.reason === 'high_value_order') {
+              speakText = `Dạ đơn hàng giá trị cao ${result.amount} USDC cần chủ shop duyệt trực tiếp ạ. Em sẽ kết nối với nhân viên thật ngay nhé.`;
+            }
+            
+            const { emitEscalationEvent } = require('../services/ai.service');
+            emitEscalationEvent(sessionId, `Khách mua hàng qua Voice gặp lỗi: ${result.message}`, escalationReason);
+          }
+
+          if (sessionId) {
+            const assistantMsgId = 'ai-order-fail-' + Date.now();
+            const { emitTranscriptReceived } = require('../websocket/socket.server');
+            emitTranscriptReceived({
+              sessionId,
+              sender: 'assistant',
+              transcript: speakText,
+              type: 'voice',
+              id: assistantMsgId
+            });
+          }
+
+          if (stream) {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+
+            const chunk1 = {
+              id: 'voice-order-fail-' + Date.now(),
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [
+                {
+                  index: 0,
+                  delta: { content: speakText },
+                  finish_reason: null
+                }
+              ]
+            };
+            res.write(`data: ${JSON.stringify(chunk1)}\n\n`);
+
+            const chunk2 = {
+              id: 'voice-order-fail-' + Date.now(),
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [
+                {
+                  index: 0,
+                  delta: {},
+                  finish_reason: 'stop'
+                }
+              ]
+            };
+            res.write(`data: ${JSON.stringify(chunk2)}\n\n`);
+            res.write('data: [DONE]\n\n');
+            res.end();
+            return;
+          } else {
+            return res.json({
+              id: 'voice-order-fail-' + Date.now(),
+              object: 'chat.completion',
+              created: Math.floor(Date.now() / 1000),
+              model: 'llama-3.1-8b-instant',
+              choices: [{
+                message: { role: 'assistant', content: speakText },
+                index: 0,
+                finish_reason: 'stop'
+              }],
+              usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+            });
+          }
         }
 
-        const paymentUrl = createPaymentRequest(order);
-        const qrCodeImage = await generateQRCode(paymentUrl);
+        // Tạo đơn hàng thành công
+        const orderId = result.order_id;
+        const qrCodeImage = result.qr_code;
+        const sellerWallet = result.seller_wallet || process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
+        const speakText = 'Dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat để xem mã QR thanh toán nhé!';
 
         // Emit WebSocket để frontend hiển thị QR
         const { getIo } = require('../websocket/socket.server');
         const io = getIo();
         if (io) {
           io.emit('voice_order_created', {
-            orderId: order.id,
-            productName: order.product_name,
-            amount: order.amount,
+            orderId: orderId,
+            productName: result.product_name,
+            amount: result.amount,
             qrCodeImage,
             customerName: detectedName,
             customerPhone: detectedPhone,
             customerAddress: detectedAddress,
-            sellerWallet: order.seller_wallet
+            sellerWallet: sellerWallet
           });
-          console.log(`[Socket.io] 📢 Đã phát sự kiện 'voice_order_created' cho đơn #${order.id}`);
+          console.log(`[Socket.io] 📢 Đã phát sự kiện 'voice_order_created' cho đơn #${orderId}`);
         } else {
           console.warn('[Socket.io] ⚠️ getIo() trả về null, không thể phát sự kiện voice_order_created');
         }
-
-        const speakText = 'Dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat để xem mã QR thanh toán nhé!';
 
         // Emit AI assistant response for voice order created success
         if (sessionId) {
@@ -451,7 +622,7 @@ ${productListPrompt}
 
       const streamResponse = await groq.chat.completions.create({
         model: 'llama-3.1-8b-instant',
-        messages: messages,
+        messages: getSlidingWindow(messages, 6),
         max_tokens: 100,
         temperature: 0.6,
         stream: true
@@ -486,7 +657,7 @@ ${productListPrompt}
     } else {
       const response = await groq.chat.completions.create({
         model: 'llama-3.1-8b-instant',
-        messages: messages,
+        messages: getSlidingWindow(messages, 6),
         max_tokens: 100,
         temperature: 0.6,
       });
