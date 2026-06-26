@@ -27,7 +27,7 @@ const logFeedbackToolDefinition = {
         },
         content: {
           type: "string",
-          description: "Nội dung phản hồi của khách hàng (ghi nguyên văn hoặc tóm tắt)",
+          description: "Nội dung phản hồi của khách hàng (ghi nguyên văn hoặc tóm tắt). BẮT BUỘC: Sử dụng tham số content để truyền nội dung feedback của khách hàng, tuyệt đối không sử dụng feedback_text hay các tên tham số khác.",
         },
         product_sku: {
           type: "string",

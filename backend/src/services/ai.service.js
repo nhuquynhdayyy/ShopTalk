@@ -971,15 +971,18 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
     let assistantMessage = data.choices[0].message;
 
     // Xử lý Tool Calling (nếu LLM yêu cầu gọi Tool)
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+    let qrCodeImage = null;
+    let orderId = null;
+    let productName = null;
+    let amount = null;
+    let toolEscalation = null;
+    let loopCount = 0;
+    const maxLoops = 3;
+
+    while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && loopCount < maxLoops) {
+      loopCount++;
       // Đưa assistant message chứa tool_calls vào history
       sessionMessages.push(assistantMessage);
-
-      let qrCodeImage = null;
-      let orderId = null;
-      let productName = null;
-      let amount = null;
-      let toolEscalation = null;
 
       for (const toolCall of assistantMessage.tool_calls) {
         const name = toolCall.function.name;
@@ -1067,18 +1070,27 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
         };
       }
 
-      // Gọi lại API lần thứ 2 với kết quả của tool
-      const secondModel = process.env.GROQ_TOOL_MODEL || modelName;
+      // Gọi lại API lần tiếp theo với kết quả của tool
+      const nextModel = process.env.GROQ_TOOL_MODEL || modelName;
+      if (apiKey === groqApiKey) {
+        console.log(`[AI Agent] ⏳ Chờ 4 giây trước khi gọi tiếp Groq API để tránh rate limit (TPM)...`);
+        await new Promise(resolve => setTimeout(resolve, 4000));
+      }
       ({ data } = await callChatCompletions(apiUrl, apiKey, {
-        model: secondModel,
+        model: nextModel,
         messages: getSlidingWindow(sessionMessages, 6),
-        temperature: 0.4
+        temperature: 0.4,
+        tools: OPENAI_TOOLS,
+        tool_choice: 'auto',
+        parallel_tool_calls: false
       }));
       if (data.error) {
-        throw new Error(`Second-step API Error: ${data.error.message}`);
+        throw new Error(`Loop-step ${loopCount} API Error: ${data.error.message}`);
       }
       assistantMessage = data.choices[0].message;
+    }
 
+    if (loopCount > 0) {
       // Lưu câu trả lời cuối cùng vào history
       sessionMessages.push(assistantMessage);
 
