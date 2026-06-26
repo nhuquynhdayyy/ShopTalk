@@ -7,11 +7,13 @@ import OffRampModal from '../components/OffRampModal';
 import OrderCard from '../components/OrderCard';
 import { useWebSocket } from '../hooks/useWebSocket';
 import mockExchangeRates from '../mocks/mockExchangeRates';
+import { localizeOrder } from '../utils/localizeProductName';
 
 const mockOrders = [
   {
     id: '6d55d8a8-303b-4c04-baa4-11de65f3f011',
     reference: '8TZdSznWn95R3FkbWQW7AZPnwpJS28C7rCZrKk2mock1',
+    canonical_product_name: 'Tai nghe Bluetooth ShopTalk',
     product_name: 'Tai nghe Bluetooth ShopTalk',
     amount: 32,
     seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
@@ -23,6 +25,7 @@ const mockOrders = [
   {
     id: '5c0b2c3a-6332-4d2c-8d71-29837f1af222',
     reference: '6yduhzHqGQy6kDKbVmqM2ck7Z7ZohJk7mock2',
+    canonical_product_name: 'Áo thun ShopTalk Essential',
     product_name: 'Áo thun ShopTalk Essential',
     amount: 18,
     seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
@@ -34,6 +37,7 @@ const mockOrders = [
   {
     id: '130d21fc-7397-4aca-8a20-88368b8cd333',
     reference: 'FUsVD1dYut8ykQhUGxQB8mWqAwmismatch3',
+    canonical_product_name: 'Mũ ShopTalk Logo',
     product_name: 'Mũ ShopTalk Logo',
     amount: 12,
     seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
@@ -45,6 +49,7 @@ const mockOrders = [
   {
     id: '5bc1a558-4a94-4797-9a41-9326527c8444',
     reference: '9PcdExpiredReferenceZ5vPj1mock4',
+    canonical_product_name: 'Sticker pack crypto',
     product_name: 'Sticker pack crypto',
     amount: 5,
     seller_wallet: '7UjR2M7C2wZjd2nSkxQHZz5qEpm2T2F4t4T3pNzShop',
@@ -104,7 +109,8 @@ const formatTimestamp = (timestamp) => {
 };
 
 function Dashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLang = i18n.language?.startsWith('vi') ? 'vi' : 'en';
   const [orders, setOrders] = useState(sortOrders(mockOrders));
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isOffRampOpen, setIsOffRampOpen] = useState(false);
@@ -157,7 +163,7 @@ function Dashboard() {
     setIsFetching(true);
 
     try {
-      const response = await api.getOrders();
+      const response = await api.getOrders(currentLang);
       const nextOrders = Array.isArray(response.data) ? response.data : [];
 
       setOrders(sortOrders(nextOrders));
@@ -168,7 +174,7 @@ function Dashboard() {
     } finally {
       setIsFetching(false);
     }
-  }, []);
+  }, [currentLang]);
 
   useEffect(() => {
     fetchOrders();
@@ -182,14 +188,15 @@ function Dashboard() {
 
     if (becamePaid) {
       playChime();
+      const localizedOrder = localizeOrder(updatedOrder, currentLang);
       setPaidAlert({
         id: updatedOrder.id,
-        product_name: updatedOrder.product_name || previousOrder?.product_name || t('dashboard.alert.default_product', 'Đơn hàng'),
+        product_name: localizedOrder.product_name || previousOrder?.product_name || t('dashboard.alert.default_product', 'Đơn hàng'),
         amount: updatedOrder.amount || previousOrder?.amount || 0
       });
       window.setTimeout(() => setPaidAlert(null), 7000);
     }
-  }, [playChime, t]);
+  }, [playChime, t, currentLang]);
 
   const handleOrderPaid = useCallback((payload) => {
     const paidOrder = normalizePaidOrder(payload);
@@ -260,6 +267,11 @@ function Dashboard() {
       attentionCount: attentionOrders.length
     };
   }, [orders]);
+
+  const displayOrders = useMemo(
+    () => orders.map((order) => localizeOrder(order, currentLang)),
+    [orders, currentLang]
+  );
 
   const handleOpenOffRamp = (order) => {
     setSelectedOrder(order);
@@ -468,11 +480,11 @@ function Dashboard() {
               <p className="text-sm text-slate-500">{t('dashboard.list.subtitle', 'Đơn vừa thanh toán sẽ tự nhảy lên đầu danh sách.')}</p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-              {orders.length} {t('dashboard.list.count_unit', 'đơn')}
+              {displayOrders.length} {t('dashboard.list.count_unit', 'đơn')}
             </span>
           </div>
 
-          {orders.length === 0 ? (
+          {displayOrders.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
               <h3 className="text-base font-semibold text-slate-950">{t('dashboard.empty.title', 'Chưa có đơn hàng')}</h3>
               <p className="mt-2 text-sm text-slate-500">
@@ -482,7 +494,7 @@ function Dashboard() {
           ) : (
             <div className="space-y-3">
               <AnimatePresence initial={false} mode="popLayout">
-                {orders.map((order) => (
+                {displayOrders.map((order) => (
                   <OrderCard key={order.id} order={order} onOfframp={handleOpenOffRamp} />
                 ))}
               </AnimatePresence>
@@ -505,14 +517,14 @@ function Dashboard() {
           <header className="flex items-center justify-between border-b border-slate-100 bg-slate-900 px-4 py-3 text-white">
             <div className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-semibold">Live Chat: Client {activeChatSessionId.slice(0, 8)}...</span>
+              <span className="text-xs font-semibold">{t('dashboard.live_chat.title', 'Live Chat')}: {t('dashboard.live_chat.client', 'Client')} {activeChatSessionId.slice(0, 8)}...</span>
             </div>
             <button
               type="button"
               onClick={() => setActiveChatSessionId(null)}
               className="text-slate-400 transition hover:text-white text-xs font-bold"
             >
-              Đóng
+              {t('dashboard.live_chat.close', 'Đóng')}
             </button>
           </header>
 
@@ -529,7 +541,7 @@ function Dashboard() {
                     }`}
                   >
                     <p className="font-semibold text-[10px] text-slate-400 mb-0.5">
-                      {isUser ? 'Khách hàng' : 'Bạn (Chủ shop)'}
+                      {isUser ? t('dashboard.live_chat.customer', 'Khách hàng') : t('dashboard.live_chat.merchant', 'Bạn (Chủ shop)')}
                     </p>
                     <span className="whitespace-pre-line">{msg.content}</span>
                   </div>
@@ -543,7 +555,7 @@ function Dashboard() {
             <input
               value={chatInputText}
               onChange={(e) => setChatInputText(e.target.value)}
-              placeholder="Nhập câu trả lời..."
+              placeholder={t('dashboard.live_chat.placeholder', 'Nhập câu trả lời...')}
               className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-950 outline-none transition focus:border-teal-500"
             />
             <button
@@ -551,7 +563,7 @@ function Dashboard() {
               disabled={!chatInputText.trim()}
               className="rounded bg-teal-600 px-3 text-xs font-semibold text-white transition hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400"
             >
-              Gửi
+              {t('dashboard.live_chat.send', 'Gửi')}
             </button>
           </form>
         </div>

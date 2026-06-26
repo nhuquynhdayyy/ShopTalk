@@ -3,12 +3,16 @@ import { BrowserRouter as Router, Navigate, NavLink, Route, Routes } from 'react
 import { useTranslation } from 'react-i18next';
 import ChatWidget from './pages/ChatWidget.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import ConfirmModal from './components/ConfirmModal.jsx';
+import { CallStatusProvider, useCallStatus } from './contexts/CallStatusContext.jsx';
 import "flag-icons/css/flag-icons.min.css";
 
-function App() {
+function AppContent() {
   const { t, i18n } = useTranslation();
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+  const [pendingLanguage, setPendingLanguage] = useState(null);
   const dropdownRef = useRef(null);
+  const { isInCall, joinChannelRef, leaveChannelRef } = useCallStatus();
 
   const navItems = [
     { to: '/chat', label: t('app.nav_chat') },
@@ -24,10 +28,43 @@ function App() {
 
   const activeLang = languages.find(l => l.code === currentLang) || languages[0];
 
-  const handleLanguageChange = (lng) => {
+  const applyLanguageChange = (lng) => {
     i18n.changeLanguage(lng);
     sessionStorage.setItem('shoptalk_language', lng);
-    setIsLangMenuOpen(false); 
+    setIsLangMenuOpen(false);
+    setPendingLanguage(null);
+  };
+
+  const handleLanguageChange = (lng) => {
+    if (lng === currentLang) {
+      setIsLangMenuOpen(false);
+      return;
+    }
+
+    if (isInCall) {
+      setPendingLanguage(lng);
+      setIsLangMenuOpen(false);
+      return;
+    }
+
+    applyLanguageChange(lng);
+  };
+
+  const handleConfirmLanguageSwitch = async () => {
+    if (!pendingLanguage) return;
+
+    try {
+      if (leaveChannelRef.current) {
+        await leaveChannelRef.current();
+      }
+      applyLanguageChange(pendingLanguage);
+      if (joinChannelRef.current) {
+        await joinChannelRef.current(pendingLanguage);
+      }
+    } catch (error) {
+      console.error('[App] Language switch during call failed:', error.message);
+      applyLanguageChange(pendingLanguage);
+    }
   };
 
   useEffect(() => {
@@ -74,7 +111,6 @@ function App() {
                 ))}
               </nav>
 
-              {/* Custom Language Dropdown (Thay thế thẻ <select>) */}
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
@@ -82,7 +118,6 @@ function App() {
                 >
                   <span className={`${activeLang.flag} text-lg rounded-sm`}></span>
                   <span className="flex-1 text-left">{activeLang.label}</span>
-                  {/* Mũi tên dropdown */}
                   <svg className={`h-4 w-4 text-slate-400 transition-transform ${isLangMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -105,7 +140,6 @@ function App() {
                   </div>
                 )}
               </div>
-              
             </div>
           </div>
         </header>
@@ -118,7 +152,25 @@ function App() {
           </Routes>
         </main>
       </div>
+
+      <ConfirmModal
+        isOpen={Boolean(pendingLanguage)}
+        title={t('app.lang_switch.title', 'Đổi ngôn ngữ trong cuộc gọi?')}
+        message={t('app.lang_switch.message', 'Cuộc gọi voice hiện tại sẽ kết thúc và bắt đầu lại bằng ngôn ngữ mới. Bạn có muốn tiếp tục?')}
+        confirmLabel={t('app.lang_switch.confirm', 'Xác nhận')}
+        cancelLabel={t('app.lang_switch.cancel', 'Huỷ')}
+        onConfirm={handleConfirmLanguageSwitch}
+        onCancel={() => setPendingLanguage(null)}
+      />
     </Router>
+  );
+}
+
+function App() {
+  return (
+    <CallStatusProvider>
+      <AppContent />
+    </CallStatusProvider>
   );
 }
 

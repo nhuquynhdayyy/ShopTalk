@@ -36,9 +36,9 @@ async function importProducts() {
         const queryText = `
           INSERT INTO products (
             sku, name, category, price_usdc, price_vnd, stock,
-            size_options, color_options, description, selling_points, reviews, images
+            size_options, color_options, description, selling_points, reviews, images, translations
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
           )
           ON CONFLICT (sku) DO UPDATE SET
             name = EXCLUDED.name,
@@ -52,6 +52,7 @@ async function importProducts() {
             selling_points = EXCLUDED.selling_points,
             reviews = EXCLUDED.reviews,
             images = EXCLUDED.images,
+            translations = EXCLUDED.translations,
             updated_at = CURRENT_TIMESTAMP;
         `;
 
@@ -67,7 +68,8 @@ async function importProducts() {
           product.description,
           JSON.stringify(product.selling_points || []),
           JSON.stringify(product.reviews || []),
-          JSON.stringify(product.images || [])
+          JSON.stringify(product.images || []),
+          JSON.stringify(product.translations || {})
         ];
 
         await pool.query(queryText, values);

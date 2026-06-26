@@ -3,6 +3,11 @@ const router = express.Router();
 const { Keypair } = require('@solana/web3.js');
 const { createOrder, getOrderById, getAllOrders, updateOrderStatus } = require('../models/order.model');
 const { verifyPayment } = require('../services/verify.service');
+const { translateOrderForLanguage } = require('../services/inventory.service');
+
+const normalizeRequestLanguage = (language) => (
+  typeof language === 'string' && language.toLowerCase().startsWith('en') ? 'en' : 'vi'
+);
 
 /**
  * Route: GET /orders
@@ -11,10 +16,14 @@ const { verifyPayment } = require('../services/verify.service');
  */
 router.get('/', async (req, res) => {
   try {
+    const language = normalizeRequestLanguage(req.query.language);
     const orders = await getAllOrders();
-    const mappedOrders = orders.map(order => ({
-      ...order,
-      isWithdrawn: order.is_withdrawn || false
+    const mappedOrders = await Promise.all(orders.map(async (order) => {
+      const translated = await translateOrderForLanguage(order, language);
+      return {
+        ...translated,
+        isWithdrawn: order.is_withdrawn || false
+      };
     }));
     return res.status(200).json({
       success: true,
@@ -85,6 +94,7 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const language = normalizeRequestLanguage(req.query.language);
 
     // Tìm kiếm đơn hàng theo ID
     const order = await getOrderById(id);
@@ -96,10 +106,12 @@ router.get('/:id', async (req, res) => {
       });
     }
 
+    const translatedOrder = await translateOrderForLanguage(order, language);
+
     return res.status(200).json({
       success: true,
       data: {
-        ...order,
+        ...translatedOrder,
         isWithdrawn: order.is_withdrawn || false
       }
     });

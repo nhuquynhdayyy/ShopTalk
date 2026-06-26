@@ -8,7 +8,7 @@ class ProductModel {
    */
   static parseJSONBFields(product) {
     if (!product) return null;
-    const jsonFields = ['size_options', 'color_options', 'selling_points', 'reviews', 'images'];
+    const jsonFields = ['size_options', 'color_options', 'selling_points', 'reviews', 'images', 'translations'];
     jsonFields.forEach(field => {
       if (product[field] !== undefined) {
         if (typeof product[field] === 'string') {

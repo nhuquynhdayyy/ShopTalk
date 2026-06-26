@@ -3,9 +3,17 @@
     "title": "ShopTalk",
     "subtitle": "AI Sales Agent + Solana Pay",
     "nav_chat": "Chat Widget",
-    "nav_dashboard": "Dashboard"
+    "nav_dashboard": "Dashboard",
+    "lang_switch": {
+      "title": "Switch language during call?",
+      "message": "The current voice call will end and restart in the new language. Do you want to continue?",
+      "confirm": "Confirm",
+      "cancel": "Cancel"
+    }
   },
   "chat": {
+    "welcome": "Hello! Welcome to ShopTalk. I am Mia, your fashion consultant. What are you looking for today — casual, office, or loungewear?",
+    "staff_label": "Staff support",
     "mock": {
       "staff_handoff": "I have transferred this conversation to our staff. Please keep this screen open, an agent will assist you shortly.",
       "order_created": "I have created the order for {{product}}. The total is {{amount}} USDC. Please scan the QR code to pay via your Solana wallet.",
@@ -48,9 +56,9 @@
       "send": "Send"
     },
     "prompts": {
-      "Tư vấn áo thun bán chạy": "Recommend best-selling t-shirts",
-      "Mình muốn mua tai nghe": "I want to buy a headset",
-      "Cho mình gặp chủ shop": "Let me talk to the shop owner"
+      "tshirt": "Recommend best-selling t-shirts",
+      "headphones": "I want to buy a headset",
+      "owner": "Let me talk to the shop owner"
     }
   },
   "dashboard": {
@@ -90,9 +98,26 @@
     "empty": {
       "title": "No orders yet",
       "subtitle": "When a customer completes an order from the Chat Widget, it will appear here."
+    },
+    "live_chat": {
+      "title": "Live Chat",
+      "client": "Client",
+      "close": "Close",
+      "customer": "Customer",
+      "merchant": "You (Merchant)",
+      "placeholder": "Type your reply...",
+      "send": "Send"
     }
   },
   "components": {
+    "transcript": {
+      "label": "Voice transcript",
+      "senders": {
+        "customer": "Customer",
+        "agent": "Agent",
+        "staff": "Staff"
+      }
+    },
     "connection": {
       "online": "Online",
       "reconnecting": "Reconnecting",
@@ -195,5 +220,45 @@
       "end_call": "End Call",
       "call_btn": "Voice Call"
     }
+  },
+  "products": {
+    "Áo Thun Basic Cotton Unisex": "Basic Cotton Unisex T-Shirt",
+    "AT-001": "Basic Cotton Unisex T-Shirt",
+    "Áo Thun Oversize Trendy": "Oversize Trendy T-Shirt",
+    "AT-002": "Oversize Trendy T-Shirt",
+    "Áo Sơ Mi Oxford Công Sở Nam/Nữ": "Oxford Office Shirt Unisex",
+    "SM-001": "Oxford Office Shirt Unisex",
+    "Áo Sơ Mi Linen Tay Dài Nữ": "Women Long Sleeve Linen Shirt",
+    "SM-002": "Women Long Sleeve Linen Shirt",
+    "Quần Jeans Slim Fit Nam": "Men Slim Fit Jeans",
+    "QJ-001": "Men Slim Fit Jeans",
+    "Quần Jeans Ống Rộng Nữ": "Women Wide-Leg Jeans",
+    "QJ-002": "Women Wide-Leg Jeans",
+    "Váy Midi Chữ A Công Sở": "A-Line Office Midi Skirt",
+    "VY-001": "A-Line Office Midi Skirt",
+    "Đầm Wrap Floral Dự Tiệc": "Floral Wrap Party Dress",
+    "DD-001": "Floral Wrap Party Dress",
+    "Áo Khoác Dù Nhẹ Chống Gió": "Lightweight Windbreaker Jacket",
+    "AK-001": "Lightweight Windbreaker Jacket",
+    "Áo Hoodie Nỉ Bông Unisex": "Unisex Fleece Hoodie",
+    "AH-001": "Unisex Fleece Hoodie",
+    "Solana Mobile Saga Phone": "Solana Mobile Saga Phone",
+    "Solana Mobile Saga v2": "Solana Mobile Saga v2",
+    "Solana Mobile Saga v2 (Demo)": "Solana Mobile Saga v2 (Demo)",
+    "ShopTalk T-Shirt": "ShopTalk T-Shirt",
+    "Ốp lưng Saga Phone trong suốt": "Saga Phone clear case",
+    "Cáp sạc USB-C 1m": "USB-C cable 1m",
+    "Củ sạc nhanh 65W GaN": "65W GaN fast charger",
+    "Tai nghe TWS Blockchain Edition": "TWS Blockchain Edition earbuds",
+    "Mũ lưỡi trai ShopTalk": "ShopTalk cap",
+    "Áo hoodie Crypto Dev": "Crypto Dev hoodie",
+    "Ledger Nano S Plus": "Ledger Nano S Plus",
+    "Sticker Pack Web3": "Web3 Sticker Pack",
+    "Balo Laptop Crypto": "Crypto Laptop Backpack",
+    "Phantom Wallet Keychain": "Phantom Wallet Keychain",
+    "Tai nghe Bluetooth ShopTalk": "ShopTalk Bluetooth Headset",
+    "Áo thun ShopTalk Essential": "ShopTalk Essential T-Shirt",
+    "Mũ ShopTalk Logo": "ShopTalk Logo Cap",
+    "Sticker pack crypto": "Crypto Sticker Pack"
   }
 }

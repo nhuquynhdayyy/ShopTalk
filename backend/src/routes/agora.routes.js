@@ -4,10 +4,14 @@ const { generateRtcToken } = require('../services/agora.service');
 const {
   groq,
   SYSTEM_PROMPT,
+  SYSTEM_PROMPT_EN,
   OPENAI_TOOLS,
-  executeTool
+  executeTool,
+  getSystemPromptForLanguage,
+  normalizeLanguage,
+  sessionLanguages
 } = require('../services/ai.service');
-const { getProducts, checkInventory } = require('../services/inventory.service');
+const { getProducts, checkInventory, formatProductCatalogForPrompt } = require('../services/inventory.service');
 
 /**
  * 1. Handler tạo Token cho Frontend (Sửa lỗi 404 và ReferenceError)
@@ -67,12 +71,11 @@ const cleanResponse = (groqData) => {
 /**
  * Hàm gọi LLM để phân tích hội thoại voice
  */
-const detectVoiceOrder = async (messages) => {
+const detectVoiceOrder = async (messages, language = 'vi') => {
   try {
     const recentMessages = messages.filter(m => m.role !== 'system').slice(-30);
     
-    // Lấy danh sách sản phẩm từ database
-    const products = await getProducts();
+    const products = await getProducts(language);
     const productMap = products
       .map(p => `- "${p.name}": ${p.price_usdc}`)
       .join('\n');
@@ -117,28 +120,16 @@ ${productMap}`;
  * Tạo chuỗi danh sách sản phẩm từ database
  * @returns {Promise<string>} Danh sách sản phẩm formatted cho system prompt
  */
-const generateProductListPrompt = async () => {
-  try {
-    const products = await getProducts();
-    if (!products || products.length === 0) {
-      return '  + Không có sản phẩm trong kho';
-    }
-    
-    return products
-      .map(p => `  + ${p.name}: ${p.price_usdc} USDC`)
-      .join('\n');
-  } catch (error) {
-    console.error('[Agora] Lỗi lấy danh sách sản phẩm:', error.message);
-    return '  + Lỗi tải danh sách sản phẩm';
-  }
-};
+const generateProductListPrompt = formatProductCatalogForPrompt;
 
 /**
  * Hàm fallback phân tích hội thoại voice bằng regex/keywords và fuzzy search
  */
-const fallbackDetectVoiceOrder = async (messages) => {
+const fallbackDetectVoiceOrder = async (messages, language = 'vi') => {
+  const lang = normalizeLanguage(language);
   const allContent = messages.map(m => m.content).join(' ').toLowerCase();
-  const hasBuyIntent = allContent.includes('mua') || allContent.includes('đặt hàng') || allContent.includes('chốt') || allContent.includes('chot') || allContent.includes('order');
+  const hasBuyIntent = allContent.includes('mua') || allContent.includes('đặt hàng') || allContent.includes('chốt') || allContent.includes('chot') || allContent.includes('order')
+    || allContent.includes('buy') || allContent.includes('purchase') || allContent.includes('i want') || allContent.includes("i'll take");
 
   let customerName = null;
   let customerPhone = null;
@@ -149,7 +140,7 @@ const fallbackDetectVoiceOrder = async (messages) => {
   // Tìm sản phẩm từ database bằng fuzzy search
   try {
     // Thử tìm từ nội dung hội thoại
-    const products = await getProducts();
+    const products = await getProducts(language);
     
     for (const product of products) {
       const productNameLower = product.name.toLowerCase();
@@ -183,25 +174,28 @@ const fallbackDetectVoiceOrder = async (messages) => {
       const currentLower = current.content.toLowerCase();
       let matched = false;
 
-      if (currentLower.includes('tên người nhận') || currentLower.includes('cho em biết tên') || currentLower.includes('xin tên') || currentLower.includes('họ và tên')) {
-        customerName = next.content.replace(/tên (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+      if (currentLower.includes('tên người nhận') || currentLower.includes('cho em biết tên') || currentLower.includes('xin tên') || currentLower.includes('họ và tên')
+        || currentLower.includes('your name') || currentLower.includes('full name') || currentLower.includes('recipient name')) {
+        customerName = next.content.replace(/tên (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').replace(/my name is/gi, '').replace(/i am/gi, '').trim();
         matched = true;
       }
-      if (currentLower.includes('số điện thoại') || currentLower.includes('sđt') || currentLower.includes('so dien thoai') || currentLower.includes('sdt') || currentLower.includes('liên hệ')) {
-        const phoneCleaned = next.content.replace(/số điện thoại (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+      if (currentLower.includes('số điện thoại') || currentLower.includes('sđt') || currentLower.includes('so dien thoai') || currentLower.includes('sdt') || currentLower.includes('liên hệ')
+        || currentLower.includes('phone number') || currentLower.includes('phone') || currentLower.includes('contact number')) {
+        const phoneCleaned = next.content.replace(/số điện thoại (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').replace(/my phone is/gi, '').trim();
         if (!matched || /\d+/.test(phoneCleaned)) {
           customerPhone = phoneCleaned;
           matched = true;
         }
       }
-      if (!matched && (currentLower.includes('địa chỉ') || currentLower.includes('cho em biết địa chỉ') || currentLower.includes('xin địa chỉ') || currentLower.includes('giao hàng'))) {
-        customerAddress = next.content.replace(/địa chỉ (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').trim();
+      if (!matched && (currentLower.includes('địa chỉ') || currentLower.includes('cho em biết địa chỉ') || currentLower.includes('xin địa chỉ') || currentLower.includes('giao hàng')
+        || currentLower.includes('shipping address') || currentLower.includes('delivery address') || currentLower.includes('address'))) {
+        customerAddress = next.content.replace(/địa chỉ (em|mình|tôi|anh|chị) là/gi, '').replace(/dạ/gi, '').replace(/my address is/gi, '').trim();
       }
     }
   }
 
-  // Regex to match a standard 10-digit phone number in Vietnam
-  const phoneRegex = /(0[3|5|7|8|9]+[0-9]{8})\b/;
+  // Regex phone: Vietnam 10-digit or international formats
+  const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}|\b(0[3|5|7|8|9]+[0-9]{8})\b/;
   const matchPhone = allContent.match(phoneRegex);
   if (matchPhone && !customerPhone) {
     customerPhone = matchPhone[1];
@@ -249,6 +243,11 @@ const llmWebhookHandler = async (req, res) => {
     if (!reqMessages) return res.status(400).json({ error: 'No messages' });
 
     const sessionId = req.query.sessionId || req.body.sessionId || req.body.channel;
+    const language = normalizeLanguage(req.query.language || req.body.language || 'vi');
+
+    if (sessionId) {
+      sessionLanguages.set(sessionId, language);
+    }
 
     // 0. Kiểm tra nếu cuộc trò chuyện đã chuyển giao sang người thật (Handoff)
     const { isSessionInHandoff } = require('../websocket/socket.server');
@@ -274,7 +273,9 @@ const llmWebhookHandler = async (req, res) => {
     const { checkEscalation, emitEscalationEvent } = require('../services/ai.service');
     if (lastUserMsg && lastUserMsg.content && checkEscalation(lastUserMsg.content)) {
       emitEscalationEvent(sessionId, lastUserMsg.content, 'manual_request');
-      const speakText = "Dạ em xin lỗi vì sự bất tiện này. Em sẽ chuyển ngay cuộc trò chuyện này sang nhân viên hỗ trợ để xử lý nhanh nhất cho mình ạ! 🙏";
+      const speakText = language === 'en'
+        ? 'I apologize for the inconvenience. I will transfer this conversation to a human support agent right away!'
+        : "Dạ em xin lỗi vì sự bất tiện này. Em sẽ chuyển ngay cuộc trò chuyện này sang nhân viên hỗ trợ để xử lý nhanh nhất cho mình ạ! 🙏";
       
       if (sessionId) {
         const assistantMsgId = 'ai-escalate-' + Date.now();
@@ -352,44 +353,54 @@ const llmWebhookHandler = async (req, res) => {
       return clean;
     });
 
-    // Đảm bảo có system prompt
+    // Đảm bảo có system prompt theo ngôn ngữ
+    const basePrompt = getSystemPromptForLanguage(language, 'voice');
     if (!messages.some(msg => msg.role === 'system')) {
-      messages.unshift({ role: 'system', content: SYSTEM_PROMPT });
+      messages.unshift({ role: 'system', content: basePrompt });
+    } else {
+      messages[0] = { role: 'system', content: basePrompt };
     }
 
-    // Lấy danh sách sản phẩm từ database
-    const productListPrompt = await generateProductListPrompt();
+    const productListPrompt = await generateProductListPrompt(language);
 
-    // Thêm instruction voice ngay sau system prompt (index 1)
-    messages.splice(1, 0, {
-      role: 'system',
-      content: `QUAN TRỌNG - ĐÂY LÀ GIAO DIỆN GIỌNG NÓI:
+    const voiceLangInstruction = language === 'en'
+      ? `IMPORTANT — THIS IS A VOICE INTERFACE:
+- Keep answers SHORT, max 2-3 short sentences
+- NEVER use backticks, markdown, code, or function names like check_inventory or create_order
+- STORE CATALOG & PRICES (always quote these exactly):
+${productListPrompt}
+- Ask for one piece of info at a time: name first, then phone, then shipping address.
+- Wait for the customer to answer before asking the next question.
+- You MUST collect full name, phone number, and shipping address before creating an order.
+- Never hallucinate that a QR was sent when information is incomplete.
+- Always respond in English.`
+      : `QUAN TRỌNG - ĐÂY LÀ GIAO DIỆN GIỌNG NÓI:
 - Trả lời NGẮN GỌN, tối đa 2-3 câu ngắn
 - TUYỆT ĐỐI không viết backtick, markdown, code, tên function như check_inventory hay create_order
 - DANH SÁCH SẢN PHẨM & GIÁ CỦA CỬA HÀNG (TUYỆT ĐỐI nói đúng giá này):
 ${productListPrompt}
 - Hỏi từng thông tin một, không hỏi cùng lúc: hỏi họ và tên trước, sau đó hỏi số điện thoại, sau đó mới hỏi địa chỉ giao hàng.
 - Chờ khách trả lời xong từng câu rồi mới hỏi thông tin tiếp theo.
-- Quy trình thu thập thông tin khi khách đồng ý mua/chốt đơn:
-  1. Hỏi họ và tên: "Dạ anh/chị cho em xin họ và tên người nhận ạ?"
-  2. Sau khi có tên, hỏi số điện thoại: "Dạ anh/chị cho em xin số điện thoại liên hệ ạ?"
-  3. Sau khi có số điện thoại, hỏi địa chỉ giao hàng: "Dạ anh/chị cho em xin địa chỉ giao hàng ạ?"
-- BẮT BUỘC phải thu thập đủ 3 thông tin: Họ tên, Số điện thoại, Địa chỉ giao hàng mới được phép nói câu "Em sẽ tạo đơn hàng" hoặc gọi công cụ tạo đơn hàng.
-- Nếu khách mới đưa tên và địa chỉ, bạn PHẢI hỏi tiếp: "Cho em xin số điện thoại để shipper liên lạc nhé?" trước khi thực hiện các bước tiếp theo.
-- Tuyệt đối không được tự bịa (hallucinate) ra việc đã gửi mã QR hoặc tạo đơn thành công khi thông tin chưa đầy đủ.`
+- BẮT BUỘC phải thu thập đủ 3 thông tin: Họ tên, Số điện thoại, Địa chỉ giao hàng mới được phép tạo đơn.
+- Tuyệt đối không được tự bịa (hallucinate) ra việc đã gửi mã QR khi thông tin chưa đầy đủ.`;
+
+    messages.splice(1, 0, {
+      role: 'system',
+      content: voiceLangInstruction
     });
 
     // Kiểm tra xem khách đã đặt đơn chưa để tránh duplicate order
     const allContentLower = messages.map(m => m.content).join(' ').toLowerCase();
     const alreadyCreated = allContentLower.includes('da em da ghi nhan thong tin, anh chi vui long nhin vao cua so chat') ||
-      allContentLower.includes('dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat');
+      allContentLower.includes('dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat') ||
+      allContentLower.includes('please look at the chat window for the payment qr');
 
     if (!alreadyCreated) {
-      const fallback = await fallbackDetectVoiceOrder(messages);
+      const fallback = await fallbackDetectVoiceOrder(messages, language);
       let detection = fallback;
 
       if (fallback.hasBuyIntent) {
-        const llmDetection = await detectVoiceOrder(messages);
+        const llmDetection = await detectVoiceOrder(messages, language);
         if (llmDetection) {
           detection = llmDetection;
         }
@@ -519,7 +530,9 @@ ${productListPrompt}
         const orderId = result.order_id;
         const qrCodeImage = result.qr_code;
         const sellerWallet = result.seller_wallet || process.env.SELLER_WALLET || '5hrFH2N3hCRaGNMUbALRhT7R3qWWe9uHMkCFhFa1JReJ';
-        const speakText = 'Dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat để xem mã QR thanh toán nhé!';
+        const speakText = language === 'en'
+          ? 'Got it! Please look at the chat window to see your Solana Pay QR code.'
+          : 'Dạ em đã ghi nhận thông tin, anh chị vui lòng nhìn vào cửa sổ chat để xem mã QR thanh toán nhé!';
 
         // Emit WebSocket để frontend hiển thị QR
         const { getIo } = require('../websocket/socket.server');
@@ -683,7 +696,9 @@ ${productListPrompt}
   } catch (error) {
     console.error('[LLM Webhook Error]:', error.message);
     if (!res.headersSent) {
-      const fallbackContent = 'Dạ, anh chị đang quan tâm sản phẩm gì ạ?';
+      const fallbackContent = language === 'en'
+        ? 'What product are you interested in today?'
+        : 'Dạ, anh chị đang quan tâm sản phẩm gì ạ?';
 
       const currentSessionId = req.query.sessionId || req.body.sessionId || req.body.channel;
       if (currentSessionId) {

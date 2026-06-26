@@ -9,19 +9,18 @@ import VoiceCallUI from '../components/VoiceCallUI';
 import { useAgoraVoice } from '../hooks/useAgoraVoice';
 import { useWebSocket } from '../hooks/useWebSocket';
 
-const mockMessages = [
+import { useCallStatus } from '../contexts/CallStatusContext';
+import { localizeOrder } from '../utils/localizeProductName';
+
+const suggestedPromptKeys = ['tshirt', 'headphones', 'owner'];
+
+const getMockMessages = (t) => ([
   {
     id: 'mock-welcome',
     role: 'assistant',
-    content: 'Dạ, ShopTalk xin chào anh/chị! Em là Mia, nhân viên tư vấn thời trang của shop. Hôm nay anh chị đang tìm kiểu gì ạ — đi chơi, đi làm, hay mặc nhà?'
+    content: t('chat.welcome', 'Dạ, ShopTalk xin chào anh/chị! Em là Mia, nhân viên tư vấn thời trang của shop. Hôm nay anh chị đang tìm kiểu gì ạ — đi chơi, đi làm, hay mặc nhà?')
   }
-];
-
-const suggestedPrompts = [
-  'Tư vấn áo thun bán chạy',
-  'Mình muốn mua tai nghe',
-  'Cho mình gặp chủ shop'
-];
+]);
 
 const mockOrderDetailsById = new Map();
 
@@ -259,7 +258,7 @@ function ChatBubble({ message, onShowQr, t }) {
     >
       {isStaff && (
         <span className="text-[10px] font-semibold text-amber-700 mb-1 ml-1">
-          👤 Nhân viên hỗ trợ
+          {t('chat.staff_label', 'Nhân viên hỗ trợ')}
         </span>
       )}
       <div
@@ -300,14 +299,15 @@ function StaffHandoff({ t }) {
 
 function ChatWidget() {
   const { t, i18n } = useTranslation();
-  const [messages, setMessages] = useState(mockMessages);
+  const currentLang = i18n.language?.startsWith('vi') ? 'vi' : 'en';
+  const [messages, setMessages] = useState(() => getMockMessages(t));
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [isEscalated, setIsEscalated] = useState(false);
   const [isStaffConnected, setIsStaffConnected] = useState(false);
 
-  const [language, setLanguage] = useState(i18n.language?.startsWith('vi') ? 'vi' : 'en');
+  const [language, setLanguage] = useState(currentLang);
 
   const [isMockMode, setIsMockMode] = useState(false);
   const [qrPayload, setQrPayload] = useState(null);
@@ -315,13 +315,39 @@ function ChatWidget() {
   const chatEndRef = useRef(null);
 
   const { isInCall, isMuted, connectionState, joinChannel, leaveChannel, toggleMute } = useAgoraVoice(sessionId);
+  const { setIsInCall: setGlobalInCall, registerCallHandlers } = useCallStatus();
+
+  useEffect(() => {
+    setGlobalInCall(isInCall);
+  }, [isInCall, setGlobalInCall]);
+
+  useEffect(() => {
+    registerCallHandlers({
+      joinChannel: (lang) => joinChannel(lang || currentLang, sessionId),
+      leaveChannel
+    });
+  }, [registerCallHandlers, joinChannel, leaveChannel, currentLang, sessionId]);
+
+  useEffect(() => {
+    setLanguage(currentLang);
+    setMessages((current) => {
+      if (current.length === 1 && current[0]?.id === 'mock-welcome') {
+        return getMockMessages(t);
+      }
+      return current;
+    });
+    setQrPayload((current) => (
+      current?.order ? { ...current, order: localizeOrder(current.order, currentLang) } : current
+    ));
+    setPaidReceipt((current) => (current ? localizeOrder(current, currentLang) : current));
+  }, [currentLang, t]);
 
   const handleVoiceOrderCreated = useCallback((data) => {
     console.log('[Socket.io] Nhận sự kiện voice_order_created:', data);
     setPaidReceipt(null);
     setQrPayload({
       qrCodeImage: data.qrCodeImage,
-      order: {
+      order: localizeOrder({
         id: data.orderId,
         product_name: data.productName,
         amount: data.amount,
@@ -329,9 +355,9 @@ function ChatWidget() {
         customer_name: data.customerName,
         customer_phone: data.customerPhone,
         customer_address: data.customerAddress
-      }
+      }, currentLang)
     });
-  }, []);
+  }, [currentLang]);
 
   const normalizePaidOrder = useCallback((payload = {}) => {
     const order = payload.order || payload.data || payload;
@@ -474,8 +500,9 @@ function ChatWidget() {
     if (!orderId) return null;
 
     try {
-      const response = await api.getOrderById(orderId);
-      return response.data || null;
+      const response = await api.getOrderById(orderId, currentLang);
+      const orderData = response.data || null;
+      return orderData ? localizeOrder(orderData, currentLang) : null;
     } catch (_) {
       return {
         id: orderId,
@@ -523,7 +550,7 @@ function ChatWidget() {
     let response;
     try {
       try {
-        response = await api.sendChatMessage(text, sessionId);
+        response = await api.sendChatMessage(text, sessionId, currentLang);
         if (!response.success) {
           throw new Error(response.error || 'Chat API returned an unsuccessful response');
         }
@@ -564,21 +591,28 @@ function ChatWidget() {
     }
   };
 
-  const handlePromptClick = (prompt) => {
-    setInputValue(prompt);
+  const handlePromptClick = (promptKey) => {
+    setInputValue(t(`chat.prompts.${promptKey}`, promptKey));
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     leaveChannel();
+    const previousSessionId = sessionId;
     const nextSessionId = generateId();
     sessionStorage.setItem('shoptalk_session_id', nextSessionId);
     setSessionId(nextSessionId);
-    setMessages(mockMessages);
+    setMessages(getMockMessages(t));
     setIsEscalated(false);
     setIsStaffConnected(false);
     setQrPayload(null);
     setPaidReceipt(null);
     setInputValue('');
+
+    if (previousSessionId) {
+      try {
+        await api.http.post('/api/ai/reset-session', { sessionId: previousSessionId });
+      } catch (_) { /* best-effort */ }
+    }
   };
 
   return (
@@ -621,7 +655,7 @@ function ChatWidget() {
               isMuted={isMuted}
               sessionId={sessionId}
               language={language}
-              onStartCall={joinChannel}
+              onStartCall={() => joinChannel(currentLang, sessionId)}
               onEndCall={leaveChannel}
               onToggleMute={toggleMute}
             />
@@ -664,14 +698,14 @@ function ChatWidget() {
               </div>
             )}
             <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-              {suggestedPrompts.map((prompt) => (
+              {suggestedPromptKeys.map((promptKey) => (
                 <button
-                  key={prompt}
+                  key={promptKey}
                   type="button"
-                  onClick={() => handlePromptClick(prompt)}
+                  onClick={() => handlePromptClick(promptKey)}
                   className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-teal-300 hover:text-teal-700"
                 >
-                  {t(`chat.prompts.${prompt}`, prompt)}
+                  {t(`chat.prompts.${promptKey}`, promptKey)}
                 </button>
               ))}
             </div>
@@ -687,7 +721,7 @@ function ChatWidget() {
               <button
                 type="button"
                 title={isInCall ? (isMuted ? t('chat.input.unmute', 'Bỏ tắt mic') : t('chat.input.mute', 'Tắt mic')) : t('chat.input.call_ai', 'Gọi thoại AI')}
-                onClick={isInCall ? toggleMute : joinChannel}
+                onClick={isInCall ? toggleMute : () => joinChannel(currentLang, sessionId)}
                 disabled={connectionState === 'CONNECTING'}
                 className={[
                   'h-11 w-11 flex-shrink-0 rounded-lg text-lg font-bold transition-all',

@@ -55,7 +55,17 @@
       "https://cdn.shoptalk.vn/products/AT-001-white.jpg",
       "https://cdn.shoptalk.vn/products/AT-001-black.jpg",
       "https://cdn.shoptalk.vn/products/AT-001-navy.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Áo Thun Basic Cotton Unisex",
+        "description": "Áo thun basic chất liệu cotton 100% thoáng mát, form regular fit phù hợp mọi vóc dáng. Đường may chắc chắn, co giãn 4 chiều, không xù lông sau nhiều lần giặt."
+      },
+      "en": {
+        "name": "Basic Cotton Unisex T-Shirt",
+        "description": "Basic 100% cotton t-shirt, breathable regular fit for all body types. Durable stitching, 4-way stretch, no pilling after many washes."
+      }
+    }
   },
   {
     "id": "prod-at-002",
@@ -103,7 +113,17 @@
     "images": [
       "https://cdn.shoptalk.vn/products/AT-002-white.jpg",
       "https://cdn.shoptalk.vn/products/AT-002-beige.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Áo Thun Oversize Trendy",
+        "description": "Áo thun oversize phong cách streetwear, form rộng thoải mái. Chất liệu cotton pha spandex, vai thụng đặc trưng. Phù hợp mix với quần baggy, jeans slim, chân váy."
+      },
+      "en": {
+        "name": "Oversize Trendy T-Shirt",
+        "description": "Oversize streetwear t-shirt with a relaxed wide fit. Cotton-spandex blend with dropped shoulders. Pairs well with baggy pants, slim jeans, or skirts."
+      }
+    }
   },
   {
     "id": "prod-sm-001",
@@ -158,7 +178,17 @@
     "images": [
       "https://cdn.shoptalk.vn/products/SM-001-white.jpg",
       "https://cdn.shoptalk.vn/products/SM-001-blue.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Áo Sơ Mi Oxford Công Sở Nam/Nữ",
+        "description": "Áo sơ mi vải Oxford cao cấp, form slim fit lịch sự. Không nhăn sau cả ngày dài, phù hợp môi trường văn phòng và các dịp quan trọng. Cổ áo cứng cáp, đường may tỉ mỉ."
+      },
+      "en": {
+        "name": "Oxford Office Shirt Unisex",
+        "description": "Premium Oxford fabric slim-fit shirt. Wrinkle-resistant for long days, ideal for office and formal occasions."
+      }
+    }
   },
   {
     "id": "prod-sm-002",
@@ -206,7 +236,17 @@
     "images": [
       "https://cdn.shoptalk.vn/products/SM-002-cream.jpg",
       "https://cdn.shoptalk.vn/products/SM-002-sage.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Áo Sơ Mi Linen Tay Dài Nữ",
+        "description": "Áo sơ mi linen tay dài phong cách minimalist, form boxy thoải mái. Chất linen tự nhiên thoáng mát, càng mặc càng mềm. Phù hợp mặc đi làm, dạo phố, đi cafe."
+      },
+      "en": {
+        "name": "Women Long Sleeve Linen Shirt",
+        "description": "Minimalist long-sleeve linen shirt with a comfortable boxy fit. Natural linen breathes well and softens over time."
+      }
+    }
   },
   {
     "id": "prod-qj-001",
@@ -256,7 +296,17 @@
     "images": [
       "https://cdn.shoptalk.vn/products/QJ-001-darkblue.jpg",
       "https://cdn.shoptalk.vn/products/QJ-001-black.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Quần Jeans Slim Fit Nam",
+        "description": "Quần jeans slim fit denim co giãn 4 chiều, tôn dáng mà không bó gò bó. Chất denim dày dặn, đường may kỹ lưỡng. Màu không bị phai, giữ form lâu bền."
+      },
+      "en": {
+        "name": "Men Slim Fit Jeans",
+        "description": "Slim fit 4-way stretch denim jeans. Thick durable denim with long-lasting color and shape."
+      }
+    }
   },
   {
     "id": "prod-qj-002",
@@ -303,7 +353,17 @@
     "images": [
       "https://cdn.shoptalk.vn/products/QJ-002-vintage.jpg",
       "https://cdn.shoptalk.vn/products/QJ-002-white.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Quần Jeans Ống Rộng Nữ",
+        "description": "Quần jeans ống rộng (wide-leg) phong cách vintage, cạp cao tôn eo. Chất denim nhẹ vừa phải, thoải mái khi di chuyển. Phối với áo croptop, áo thun tucked in cực đẹp."
+      },
+      "en": {
+        "name": "Women Wide-Leg Jeans",
+        "description": "Vintage wide-leg high-waist jeans. Light denim, comfortable movement. Pairs with crop tops or tucked-in shirts."
+      }
+    }
   },
   {
     "id": "prod-vy-001",
@@ -358,7 +418,17 @@
     "images": [
       "https://cdn.shoptalk.vn/products/VY-001-black.jpg",
       "https://cdn.shoptalk.vn/products/VY-001-navy.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Váy Midi Chữ A Công Sở",
+        "description": "Váy midi chữ A dáng xòe nhẹ, dài qua gối. Chất vải dệt kim cao cấp không nhăn, không bí. Phù hợp đi làm văn phòng, họp, hoặc đi ăn tối lịch sự."
+      },
+      "en": {
+        "name": "A-Line Office Midi Skirt",
+        "description": "A-line midi skirt past the knee. Premium knit fabric, wrinkle-free. Suitable for office, meetings, or dinner."
+      }
+    }
   },
   {
     "id": "prod-dd-001",
@@ -404,7 +474,17 @@
     "images": [
       "https://cdn.shoptalk.vn/products/DD-001-black-floral.jpg",
       "https://cdn.shoptalk.vn/products/DD-001-white-floral.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Đầm Wrap Floral Dự Tiệc",
+        "description": "Đầm wrap (quấn) họa tiết hoa nhí, cổ chữ V sang trọng. Chất vải chiffon nhẹ nhàng, duyên dáng khi di chuyển. Phù hợp dự tiệc cưới, sinh nhật, sự kiện."
+      },
+      "en": {
+        "name": "Floral Wrap Party Dress",
+        "description": "Floral wrap dress with elegant V-neck. Lightweight chiffon, graceful movement. Ideal for weddings, birthdays, and events."
+      }
+    }
   },
   {
     "id": "prod-ak-001",
@@ -453,7 +533,17 @@
     "images": [
       "https://cdn.shoptalk.vn/products/AK-001-black.jpg",
       "https://cdn.shoptalk.vn/products/AK-001-navy.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Áo Khoác Dù Nhẹ Chống Gió",
+        "description": "Áo khoác dù nhẹ chống gió, chống thấm nước nhẹ. Có mũ chống mưa nhỏ, túi kéo khóa tiện lợi. Gấp gọn được bỏ vào túi. Phù hợp đi du lịch, đi xe máy, leo núi nhẹ."
+      },
+      "en": {
+        "name": "Lightweight Windbreaker Jacket",
+        "description": "Light windproof jacket with light water resistance. Packable hood and zip pockets. Great for travel and commuting."
+      }
+    }
   },
   {
     "id": "prod-ah-001",
@@ -502,6 +592,16 @@
     "images": [
       "https://cdn.shoptalk.vn/products/AH-001-black.jpg",
       "https://cdn.shoptalk.vn/products/AH-001-gray.jpg"
-    ]
+    ],
+    "translations": {
+      "vi": {
+        "name": "Áo Hoodie Nỉ Bông Unisex",
+        "description": "Áo hoodie chất nỉ bông dày ấm, mặt trong lót lông nhung mềm mại. Túi kangaroo rộng tiện lợi, dây rút mũ điều chỉnh được. Phong cách casual, phù hợp mùa lạnh."
+      },
+      "en": {
+        "name": "Unisex Fleece Hoodie",
+        "description": "Thick fleece hoodie with soft inner lining. Kangaroo pocket and adjustable hood drawstring. Casual cold-weather staple."
+      }
+    }
   }
 ]

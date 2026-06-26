@@ -70,6 +70,11 @@ async function runMigration() {
     `);
     console.log('✅ Xong: Bảng "products" đã được tạo.');
 
+    await pool.query(`
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS translations JSONB DEFAULT '{}'::jsonb;
+    `);
+    console.log('✅ Xong: Cột "translations" trên bảng "products" đã sẵn sàng.');
+
     // 5. Tạo bảng orders (Giữ nguyên cấu trúc cũ và cập nhật các trường/index)
     console.log('🚀 Bắt đầu: Tạo hoặc cập nhật bảng "orders"...');
     await pool.query(`
