@@ -17,6 +17,7 @@ function OffRampModal({
   const [bankName, setBankName] = useState('VPBank');
   const [bankAccount, setBankAccount] = useState('1234567890');
   const [step, setStep] = useState('form');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const banks = [
     { value: 'VPBank', label: t('components.offramp.banks.vpbank', 'VPBank (CAEX Thi diem)') },
@@ -29,16 +30,24 @@ function OffRampModal({
   const amount = Number(order?.amount || 0);
   const receivedVnd = useMemo(() => amount * EXCHANGE_RATE, [amount]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setStep('processing');
-    window.setTimeout(() => {
+    setErrorMessage('');
+
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      await onComplete?.(order);
       setStep('success');
-      onComplete?.(order);
-    }, 1200);
+    } catch (error) {
+      console.error('[OffRamp] Withdraw failed:', error.message);
+      setErrorMessage(t('components.offramp.error', 'Khong the cap nhat trang thai rut tien. Vui long thu lai.'));
+      setStep('form');
+    }
   };
 
   const handleClose = () => {
     setStep('form');
+    setErrorMessage('');
     onClose();
   };
 
@@ -133,6 +142,12 @@ function OffRampModal({
                   >
                     {t('components.offramp.submit', 'Xac nhan rut tien')}
                   </button>
+
+                  {errorMessage && (
+                    <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                      {errorMessage}
+                    </p>
+                  )}
                 </div>
 
                 <OffRampChart data={exchangeRates} />

@@ -95,6 +95,12 @@ const normalizePaidOrder = (payload = {}, t) => {
   };
 };
 
+const normalizeOrderFlags = (order = {}) => ({
+  ...order,
+  isWithdrawn: Boolean(order.isWithdrawn || order.is_withdrawn || order.offramped || order.offRampStatus === 'completed'),
+  offramped: Boolean(order.offramped || order.isWithdrawn || order.is_withdrawn || order.offRampStatus === 'completed')
+});
+
 const formatTimestamp = (timestamp, lng = 'vi-VN') => {
   try {
     const locale = lng?.startsWith('vi') ? 'vi-VN' : 'en-US';
@@ -165,7 +171,7 @@ function Dashboard() {
 
     try {
       const response = await api.getOrders(currentLang);
-      const nextOrders = Array.isArray(response.data) ? response.data : [];
+      const nextOrders = Array.isArray(response.data) ? response.data.map(normalizeOrderFlags) : [];
 
       setOrders(sortOrders(nextOrders));
       setDataMode('live');
@@ -284,14 +290,22 @@ function Dashboard() {
     if (!order?.id) return;
 
     try {
-      await api.withdrawOrder(order.id);
+      const response = await api.withdrawOrder(order.id);
+      const updatedOrder = response?.data || response || order;
+      const withdrawnOrder = normalizeOrderFlags({
+        ...updatedOrder,
+        id: updatedOrder.id || order.id,
+        status: updatedOrder.status || order.status,
+        isWithdrawn: true,
+        offramped: true
+      });
+      handleOrderStatusUpdated(withdrawnOrder);
+      await fetchOrders();
+      return withdrawnOrder;
     } catch (error) {
       console.error('[Dashboard] Lỗi khi gọi API withdraw:', error.message);
+      throw error;
     }
-
-    setOrders((current) => current.map((item) => (
-      item.id === order.id ? { ...item, offramped: true, isWithdrawn: true } : item
-    )));
   };
 
   const handleAcceptEscalation = async (id) => {

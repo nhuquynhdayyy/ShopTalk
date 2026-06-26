@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3000;
 // Đăng ký các middleware cơ bản
 app.use(cors({
   origin: '*', // Cho phép gọi API xuyên miền (CORS) phục vụ cho Frontend
-  methods: ['GET', 'POST']
+  methods: ['GET', 'POST', 'PATCH', 'OPTIONS']
 })); 
 app.use(express.json()); // Hỗ trợ đọc dữ liệu JSON gửi lên trong req.body
 

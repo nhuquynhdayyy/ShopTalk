@@ -22,7 +22,9 @@ router.get('/', async (req, res) => {
       const translated = await translateOrderForLanguage(order, language);
       return {
         ...translated,
-        isWithdrawn: order.is_withdrawn || false
+        isWithdrawn: Boolean(order.is_withdrawn),
+        is_withdrawn: Boolean(order.is_withdrawn),
+        offramped: Boolean(order.is_withdrawn)
       };
     }));
     return res.status(200).json({
@@ -112,7 +114,9 @@ router.get('/:id', async (req, res) => {
       success: true,
       data: {
         ...translatedOrder,
-        isWithdrawn: order.is_withdrawn || false
+        isWithdrawn: Boolean(order.is_withdrawn),
+        is_withdrawn: Boolean(order.is_withdrawn),
+        offramped: Boolean(order.is_withdrawn)
       }
     });
   } catch (error) {
@@ -227,10 +231,29 @@ router.patch('/:id/withdraw', async (req, res) => {
       });
     }
 
+    try {
+      const { getIo } = require('../websocket/socket.server');
+      const io = getIo();
+      if (io) {
+        io.emit('order_status_updated', {
+          ...updatedOrder,
+          isWithdrawn: true
+        });
+        console.log(`[Socket.io] 📢 Đã phát sự kiện 'order_status_updated' cho đơn hàng rút tiền #${id}`);
+      }
+    } catch (wsErr) {
+      console.error('[Socket.io] Lỗi khi phát sự kiện rút tiền:', wsErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Cập nhật trạng thái rút tiền thành công!',
-      data: updatedOrder
+      data: {
+        ...updatedOrder,
+        isWithdrawn: Boolean(updatedOrder.is_withdrawn),
+        is_withdrawn: Boolean(updatedOrder.is_withdrawn),
+        offramped: Boolean(updatedOrder.is_withdrawn)
+      }
     });
   } catch (error) {
     console.error(`Lỗi khi PATCH /orders/${req.params.id}/withdraw:`, error.message);
