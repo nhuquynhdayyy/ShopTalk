@@ -112,10 +112,10 @@ const formatTimestamp = (timestamp, lng = 'vi-VN') => {
 function Dashboard() {
   const { t, i18n } = useTranslation();
   const currentLang = i18n.language?.startsWith('vi') ? 'vi' : 'en';
-  const [orders, setOrders] = useState(sortOrders(mockOrders));
+  const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isOffRampOpen, setIsOffRampOpen] = useState(false);
-  const [dataMode, setDataMode] = useState('mock');
+  const [dataMode, setDataMode] = useState('live');
   const [isFetching, setIsFetching] = useState(false);
   const [paidAlert, setPaidAlert] = useState(null);
   const [escalations, setEscalations] = useState([]);
@@ -169,9 +169,10 @@ function Dashboard() {
 
       setOrders(sortOrders(nextOrders));
       setDataMode('live');
-    } catch (_) {
-      setOrders((current) => (current.length ? current : sortOrders(mockOrders)));
-      setDataMode('mock');
+    } catch (error) {
+      console.error('[Dashboard] Không thể tải đơn hàng:', error.message);
+      setOrders([]);
+      setDataMode('error');
     } finally {
       setIsFetching(false);
     }
@@ -382,9 +383,9 @@ function Dashboard() {
 
           <div className="flex flex-wrap items-center gap-3">
             <ConnectionIndicator {...socketState} />
-            {dataMode === 'mock' && (
-              <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
-                {t('dashboard.header.mock_data', 'Mock data')}
+            {dataMode === 'error' && (
+              <span className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
+                {t('dashboard.header.load_error', 'Không tải được dữ liệu')}
               </span>
             )}
             <button
@@ -573,5 +574,4 @@ function Dashboard() {
   );
 }
 
-export { mockOrders };
 export default Dashboard;

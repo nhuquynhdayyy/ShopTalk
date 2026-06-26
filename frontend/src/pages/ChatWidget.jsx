@@ -399,6 +399,25 @@ function ChatWidget() {
     };
   }, [qrPayload, t]);
 
+  const appendPaymentNarration = useCallback((order, messageIdPrefix) => {
+    const narration = t(
+      'chat.system.payment_confirmed_msg',
+      'Mình đã nhận được thanh toán của bạn. Đơn hàng đang được xử lý ngay bây giờ.'
+    );
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: `${messageIdPrefix}-${order?.id || Date.now()}`,
+        role: 'assistant',
+        sender: 'ai',
+        type: 'voice',
+        content: narration,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+  }, [t]);
+
   const handleTranscriptReceived = useCallback((payload = {}) => {
     if (isMuted) {
       console.log('[Agora] Transcript blocked because mic is muted:', payload.transcript || payload.content);
@@ -470,7 +489,8 @@ function ChatWidget() {
       }
       ]);
     }
-  }, [normalizePaidOrder, t]);
+    appendPaymentNarration(paidOrder, 'paid');
+  }, [appendPaymentNarration, normalizePaidOrder, t]);
 
   useEffect(() => {
     const orderId = qrPayload?.order?.id;
@@ -551,14 +571,7 @@ function ChatWidget() {
         // Dùng setTimeout để không gọi setState trong setState
         setTimeout(() => {
           setPaidReceipt(paidOrder);
-          setMessages((current) => [
-            ...current,
-            {
-              id: `confirmed-${finalOrderId || Date.now()}-${Date.now()}`,
-              role: 'assistant',
-              content: t('chat.system.payment_confirmed_msg', 'Hệ thống đã nhận được thanh toán của bạn, cảm ơn!')
-            }
-          ]);
+          appendPaymentNarration(paidOrder, 'confirmed');
           
           // Phát âm thanh thành công (optional)
           try {
@@ -577,7 +590,7 @@ function ChatWidget() {
 
       return currentQrPayload; // Giữ nguyên nếu orderId không khớp
     });
-  }, [t]);
+  }, [appendPaymentNarration, t]);
 
   const handleStaffJoined = useCallback((payload = {}) => {
     console.log('[Socket] Nhân viên đã tham gia phòng:', payload);
