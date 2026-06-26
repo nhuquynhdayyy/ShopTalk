@@ -116,6 +116,10 @@ const handleLiveMessage = (socket, payload = {}) => {
   return true;
 };
 
+const isSessionInHandoff = (sessionId) => {
+  return liveHandoffSessions.has(sessionId);
+};
+
 /**
  * Khởi tạo Socket.io Server gắn liền với HTTP Server
  * @param {Object} server - Instance của HTTP server Express
@@ -141,6 +145,13 @@ const initSocket = (server) => {
 
     socket.on('live_message', (payload) => {
       handleLiveMessage(socket, payload);
+    });
+
+    socket.on('agent_message', (payload) => {
+      const sessionId = payload?.sessionId || socket.data?.sessionId;
+      if (sessionId) {
+        io.to(getSessionRoom(sessionId)).emit('agent_message', payload);
+      }
     });
 
     socket.on('disconnect', () => {
@@ -178,6 +189,7 @@ module.exports = {
   handleJoinSession,
   handleAcceptEscalation,
   handleLiveMessage,
+  isSessionInHandoff,
   __setIoForTest,
   __resetLiveHandoffForTest
 };

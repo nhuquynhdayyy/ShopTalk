@@ -8,7 +8,7 @@ const { checkInventory, normalize } = require('./inventory.service');
 const axios = require('axios');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
-const { getIo } = require('../websocket/socket.server');
+const { getIo, isSessionInHandoff } = require('../websocket/socket.server');
 
 const SYSTEM_PROMPT = `Bạn là trợ lý bán hàng (Sales Agent) AI thông minh của cửa hàng "ShopTalk".
 Nhiệm vụ của bạn là tư vấn dựa trên Phễu bán hàng 6 bước (Sales Funnel Stages), nhưng phải CỰC KỲ LINH HOẠT tùy theo tình huống thực tế:
@@ -507,6 +507,16 @@ const parseReplyContent = (content) => {
  * @returns {Promise<Object>} { success, reply, escalate, qrCodeImage, orderId }
  */
 const chat = async (sessionId, userMessage) => {
+  // 0. Kiểm tra nếu cuộc trò chuyện đã chuyển giao sang người thật (Handoff)
+  if (typeof isSessionInHandoff === 'function' && isSessionInHandoff(sessionId)) {
+    console.log(`[AI Agent] 🛑 Chặn AI trả lời cho sessionId: ${sessionId} (đang trong chế độ người thật hỗ trợ)`);
+    return {
+      success: true,
+      reply: null,
+      suppress: true
+    };
+  }
+
   // 1. Kiểm tra logic Escalation ngay trước khi gửi LLM
   if (checkEscalation(userMessage)) {
     // Bắn WebSocket event tới Dashboard để nhân viên biết có khách cần hỗ trợ

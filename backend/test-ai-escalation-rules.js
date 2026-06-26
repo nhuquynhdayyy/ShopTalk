@@ -46,7 +46,13 @@ const createSocketCapture = () => {
     emit: (eventName, payload) => {
       events.push({ eventName, payload });
       return true;
-    }
+    },
+    to: (roomName) => ({
+      emit: (eventName, payload) => {
+        events.push({ eventName, payload, room: roomName });
+        return true;
+      }
+    })
   });
   return events;
 };
@@ -113,6 +119,25 @@ test('Task 3: create_order vượt ngưỡng -> không tạo đơn, escalate cho
   assert.strictEqual(getCallCount(), 1, 'Không gọi LLM vòng 2 khi đơn vượt ngưỡng');
   assert.strictEqual(events.length, 1);
   assert.strictEqual(events[0].payload.reason, 'high_value_order');
+});
+
+test('Task 4: Chặn AI trả lời khi session đang trong chế độ live handoff (isSessionInHandoff)', async () => {
+  const events = createSocketCapture();
+  const sessionId = 'session-live-handoff-test';
+  
+  // Giả lập staff accept_escalation
+  const { handleAcceptEscalation, __resetLiveHandoffForTest } = require('./src/websocket/socket.server');
+  
+  handleAcceptEscalation({ join: () => {}, data: {} }, { sessionId, staffName: 'Thanh Phúc' });
+  
+  const result = await chat(sessionId, 'Nhân viên có đó không?');
+  
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(result.reply, null);
+  assert.strictEqual(result.suppress, true);
+  
+  // Cleanup
+  __resetLiveHandoffForTest();
 });
 
 (async () => {
