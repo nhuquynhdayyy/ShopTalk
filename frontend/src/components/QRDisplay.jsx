@@ -1,7 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 
 function QRDisplay({ qrCodeImage, amount, productName, orderId }) {
+  const { t } = useTranslation();
+
   if (!qrCodeImage) return null;
 
   return (
@@ -14,17 +17,17 @@ function QRDisplay({ qrCodeImage, amount, productName, orderId }) {
       {/* Decorative top bar */}
       <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#5B3FE0]"></div>
 
-      <h3 className="text-[#5B3FE0] font-bold text-lg mb-2">Thanh toán Solana Pay</h3>
+      <h3 className="text-[#5B3FE0] font-bold text-lg mb-2">{t('components.qr_display.title', 'Thanh toán Solana Pay')}</h3>
       
       {productName && (
         <p className="text-sm text-gray-400 mb-1">
-          Sản phẩm: <span className="text-[#F0F2F5] font-semibold">{productName}</span>
+          {t('components.qr_display.product', 'Sản phẩm:')} <span className="text-[#F0F2F5] font-semibold">{productName}</span>
         </p>
       )}
       
       {amount && (
         <p className="text-sm text-gray-400 mb-4">
-          Số tiền: <span className="text-[#14F195] font-bold text-lg">{amount} USDC</span>
+          {t('components.qr_display.amount', 'Số tiền:')} <span className="text-[#14F195] font-bold text-lg">{amount} USDC</span>
         </p>
       )}
 
@@ -32,13 +35,13 @@ function QRDisplay({ qrCodeImage, amount, productName, orderId }) {
       <div className="bg-white p-4 rounded-xl inline-block shadow-inner mb-4 transition-transform hover:scale-105 duration-300">
         <img 
           src={qrCodeImage} 
-          alt="Solana Pay QR Code" 
+          alt={t('components.qr_display.alt', 'Solana Pay QR Code')} 
           className="w-56 h-56 block mx-auto"
         />
       </div>
 
       <p className="text-xs text-[#8F9CAE] leading-relaxed mb-3">
-        💡 Mở ví Phantom/Solflare (mạng <b>Devnet</b>) quét mã QR trên để xác nhận giao dịch.
+        💡 <span dangerouslySetInnerHTML={{ __html: t('components.qr_display.instruction', 'Mở ví Phantom/Solflare (mạng <b>Devnet</b>) quét mã QR trên để xác nhận giao dịch.') }} />
       </p>
 
       {orderId && (

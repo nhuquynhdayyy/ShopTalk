@@ -58,8 +58,8 @@ const startAgoraAgent = async (channelName, language = 'vi', sessionId = null) =
   });
   return response.data;
 };
-const sendChatMessage = (message, sessionId = null) => (
-  tryEndpoints('post', ['/api/ai/chat', '/chat'], { message, sessionId })
+const sendChatMessage = (message, sessionId = null, language = 'vi') => (
+  tryEndpoints('post', ['/api/ai/chat', '/chat'], { message, sessionId, language })
 );
 
 const getChatHistory = (sessionId) => (

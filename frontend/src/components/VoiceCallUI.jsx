@@ -1,36 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-
-const statusCopy = {
-  CONNECTING: {
-    label: 'Đang kết nối',
-    description: 'Đang mở kênh voice với ShopTalk AI.'
-  },
-  CONNECTED: {
-    label: 'Đang lắng nghe',
-    description: 'Transcript sẽ được ghi vào luồng chat.'
-  },
-  DISCONNECTED: {
-    label: 'Chưa kết nối',
-    description: 'Bắt đầu voice call khi khách muốn tư vấn bằng giọng nói.'
-  },
-  RECONNECTING: {
-    label: 'Đang kết nối lại',
-    description: 'Giữ màn hình này mở trong khi hệ thống khôi phục kênh voice.'
-  },
-  FAILED: {
-    label: 'Lỗi kết nối',
-    description: 'Không thể mở kênh voice. Vui lòng làm mới trang hoặc thử lại.'
-  },
-  speaking: {
-    label: 'Đang nói',
-    description: 'Tin nhắn voice đang được chuyển thành transcript.'
-  },
-  listening: {
-    label: 'Đang lắng nghe',
-    description: 'ShopTalk sẵn sàng nhận giọng nói từ khách.'
-  }
-};
+import { useTranslation } from 'react-i18next';
 
 function Waveform({ active }) {
   const bars = [18, 28, 14, 34, 22, 30, 16];
@@ -66,7 +36,29 @@ function VoiceCallUI({
   onEndCall,
   onToggleMute
 }) {
-  const config = statusCopy[status] || statusCopy.DISCONNECTED;
+  const { t } = useTranslation();
+
+  const getStatusCopy = (s) => {
+    switch(s) {
+      case 'CONNECTING':
+        return { label: t('components.voice.status.connecting_lbl', 'Đang kết nối'), description: t('components.voice.status.connecting_desc', 'Đang mở kênh voice với ShopTalk AI.') };
+      case 'CONNECTED':
+        return { label: t('components.voice.status.connected_lbl', 'Đang lắng nghe'), description: t('components.voice.status.connected_desc', 'Transcript sẽ được ghi vào luồng chat.') };
+      case 'RECONNECTING':
+        return { label: t('components.voice.status.reconnecting_lbl', 'Đang kết nối lại'), description: t('components.voice.status.reconnecting_desc', 'Giữ màn hình này mở trong khi hệ thống khôi phục kênh voice.') };
+      case 'FAILED':
+        return { label: t('components.voice.status.failed_lbl', 'Lỗi kết nối'), description: t('components.voice.status.failed_desc', 'Không thể mở kênh voice. Vui lòng làm mới trang hoặc thử lại.') };
+      case 'speaking':
+        return { label: t('components.voice.status.speaking_lbl', 'Đang nói'), description: t('components.voice.status.speaking_desc', 'Tin nhắn voice đang được chuyển thành transcript.') };
+      case 'listening':
+        return { label: t('components.voice.status.listening_lbl', 'Đang lắng nghe'), description: t('components.voice.status.listening_desc', 'ShopTalk sẵn sàng nhận giọng nói từ khách.') };
+      case 'DISCONNECTED':
+      default:
+        return { label: t('components.voice.status.disconnected_lbl', 'Chưa kết nối'), description: t('components.voice.status.disconnected_desc', 'Bắt đầu voice call khi khách muốn tư vấn bằng giọng nói.') };
+    }
+  };
+
+  const config = getStatusCopy(status);
   const waveformActive = isInCall && !isMuted && status !== 'CONNECTING';
 
   return (
@@ -90,13 +82,13 @@ function VoiceCallUI({
               </span>
               {isMuted && (
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                  Mic tat
+                  {t('components.voice.muted', 'Mic tat')}
                 </span>
               )}
             </div>
             <p className="mt-1 text-sm text-slate-500">{config.description}</p>
             <p className="mt-1 truncate text-xs text-slate-400">
-              {sessionId ? `Session ${sessionId}` : 'Voice session'} - {language.toUpperCase()}
+              {sessionId ? `Session ${sessionId}` : t('components.voice.session', 'Voice session')} - {language.toUpperCase()}
             </p>
           </div>
         </div>
@@ -109,7 +101,7 @@ function VoiceCallUI({
               onClick={onToggleMute}
               className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
-              {isMuted ? 'Unmute' : 'Mute'}
+              {isMuted ? t('components.voice.unmute', 'Unmute') : t('components.voice.mute', 'Mute')}
             </button>
           )}
           <button
@@ -122,7 +114,7 @@ function VoiceCallUI({
                 : 'bg-teal-600 text-white hover:bg-teal-700'
             }`}
           >
-            {isInCall ? 'End Call' : 'Voice call'}
+            {isInCall ? t('components.voice.end_call', 'End Call') : t('components.voice.call_btn', 'Voice call')}
           </button>
         </div>
       </div>

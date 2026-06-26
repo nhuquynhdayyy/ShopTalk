@@ -1,0 +1,199 @@
+{
+  "app": {
+    "title": "ShopTalk",
+    "subtitle": "Trợ lý AI Bán hàng + Solana Pay",
+    "nav_chat": "Khung Chat",
+    "nav_dashboard": "Bảng Điều Khiển"
+  },
+  "chat": {
+    "mock": {
+      "staff_handoff": "Mình đã chuyển cuộc trò chuyện này cho nhân viên. Bạn giữ màn hình này mở, nhân viên sẽ tiếp nhận ngay.",
+      "order_created": "Mình đã tạo đơn {{product}}. Tổng thanh toán là {{amount}} USDC. Bạn quét mã QR vừa mở để thanh toán qua ví Solana nhé.",
+      "suggestion": "Mình gợi ý bắt đầu với áo thun ShopTalk Essential nếu bạn cần món dễ bán, hoặc tai nghe Bluetooth nếu khách của bạn thích phụ kiện công nghệ. Bạn muốn mình tạo đơn cho sản phẩm nào?"
+    },
+    "qr": {
+      "default_product": "Sản phẩm",
+      "order_created_title": "Đơn hàng được khởi tạo",
+      "product_label": "Sản phẩm:",
+      "amount_label": "Số tiền:",
+      "order_id_label": "Mã đơn:",
+      "scan_hint": "Quét bằng ví Phantom/Solflare (Devnet)",
+      "zoom_btn": "Phóng to QR",
+      "copied_alert": "Đã copy địa chỉ ví người nhận!",
+      "copy_wallet_btn": "Copy ví người bán",
+      "checking_inventory": "Đang kiểm tra kho:"
+    },
+    "staff": {
+      "avatar": "NV",
+      "title": "Nhân viên đang hỗ trợ",
+      "message": "Chào bạn, mình đã nhận được yêu cầu. Bạn chờ trong giây lát để shop tiếp tục cuộc trò chuyện nhé."
+    },
+    "system": {
+      "paid_success": "{{product}} đã thanh toán thành công{{amountText}}."
+    },
+    "header": {
+      "title": "ShopTalk Chat",
+      "subtitle_escalated": "Đã chuyển sang nhân viên",
+      "subtitle_ready": "AI Sales Agent đang sẵn sàng",
+      "mock_data": "Mock data",
+      "refresh": "Làm mới"
+    },
+    "input": {
+      "waiting_payment": "AI đang đợi bạn thanh toán đơn hàng \"{{product}}\"...",
+      "close_qr": "Đóng QR",
+      "placeholder": "Nhập câu hỏi hoặc yêu cầu mua hàng...",
+      "unmute": "Bỏ tắt mic",
+      "mute": "Tắt mic",
+      "call_ai": "Gọi thoại AI",
+      "send": "Gửi"
+    },
+    "prompts": {
+      "Tư vấn áo thun bán chạy": "Tư vấn áo thun bán chạy",
+      "Mình muốn mua tai nghe": "Mình muốn mua tai nghe",
+      "Cho mình gặp chủ shop": "Cho mình gặp chủ shop"
+    }
+  },
+  "dashboard": {
+    "alert": {
+      "default_product": "Đơn hàng",
+      "paid_prefix": "Đơn",
+      "paid_suffix": "đã thanh toán thành công:",
+      "close": "Đóng"
+    },
+    "escalation": {
+      "default_msg": "Khách hàng cần nhân viên hỗ trợ.",
+      "title": "Khách hàng cần nhân viên hỗ trợ",
+      "session": "Session",
+      "unknown": "không rõ",
+      "accepted": "Đã nhận",
+      "accept": "Nhận"
+    },
+    "header": {
+      "merchant": "Merchant Dashboard",
+      "title": "Đơn hàng ShopTalk",
+      "subtitle": "Theo dõi thanh toán USDC, xử lý cảnh báo và rút tiền về ngân hàng trong cùng một màn hình.",
+      "mock_data": "Mock data",
+      "fetching": "Đang tải...",
+      "refresh": "Làm mới"
+    },
+    "stats": {
+      "usdc": "USDC đã nhận",
+      "paid": "Đơn đã thanh toán",
+      "pending": "Đang chờ",
+      "attention": "Cần chú ý"
+    },
+    "list": {
+      "title": "Danh sách đơn hàng",
+      "subtitle": "Đơn vừa thanh toán sẽ tự nhảy lên đầu danh sách.",
+      "count_unit": "đơn"
+    },
+    "empty": {
+      "title": "Chưa có đơn hàng",
+      "subtitle": "Khi khách chốt đơn từ Chat Widget, đơn sẽ xuất hiện tại đây."
+    }
+  },
+  "components": {
+    "connection": {
+      "online": "Online",
+      "reconnecting": "Đang nối lại",
+      "offline": "Offline",
+      "tooltip": "Trạng thái kết nối thời gian thực"
+    },
+    "offramp": {
+      "banks": {
+        "vpbank": "VPBank (CAEX Thi diem)",
+        "techcombank": "Techcombank (TCEX Thi diem)",
+        "vietcombank": "Vietcombank",
+        "mb": "MB Bank",
+        "acb": "ACB"
+      },
+      "close_aria": "Đóng modal rút tiền",
+      "tag": "Off-ramp",
+      "title": "Rút USDC về ngân hàng",
+      "balance": "Số dư khả dụng",
+      "exchange_rate": "Tỷ giá giả định",
+      "receive": "Thực nhận",
+      "bank_name": "Ngân hàng",
+      "account_number": "Số tài khoản",
+      "account_placeholder": "Nhập số tài khoản",
+      "submit": "Xác nhận rút tiền",
+      "processing_title": "Đang xử lý lệnh rút",
+      "processing_desc": "ShopTalk đang gửi yêu cầu sang đối tác off-ramp.",
+      "success_title": "Rút tiền thành công",
+      "success_desc": "{{amount}} USDC đã được quy đổi thành {{vnd}} VND và chuyển về tài khoản {{account}} tại {{bank}}.",
+      "close_btn": "Đóng"
+    },
+    "order": {
+      "unknown_time": "Không rõ thời gian",
+      "withdrawn": "Đã rút VND",
+      "default_product": "Đơn hàng ShopTalk",
+      "order_id": "Mã đơn:",
+      "wallet": "Ví nhận:",
+      "customer": "Người nhận:",
+      "phone": "Điện thoại:",
+      "address": "Địa chỉ giao:",
+      "amount": "Số tiền",
+      "withdraw_btn": "Rút VND"
+    },
+    "paid_badge": {
+      "title": "Đã thanh toán",
+      "default_product": "Đơn hàng ShopTalk",
+      "received": "đã nhận thanh toán"
+    },
+    "qr_display": {
+      "title": "Thanh toán Solana Pay",
+      "product": "Sản phẩm:",
+      "amount": "Số tiền:",
+      "alt": "Solana Pay QR Code",
+      "instruction": "Mở ví Phantom/Solflare (mạng <b>Devnet</b>) quét mã QR trên để xác nhận giao dịch."
+    },
+    "qr_modal": {
+      "no_wallet": "Chưa có dữ liệu ví",
+      "close_aria": "Đóng modal QR",
+      "title": "Quét mã để thanh toán",
+      "close_btn": "Đóng",
+      "alt": "Mã QR thanh toán Solana Pay",
+      "product": "Sản phẩm",
+      "default_product": "Đơn hàng ShopTalk",
+      "amount": "Số tiền",
+      "order_id": "Mã đơn",
+      "customer": "Khách hàng",
+      "phone": "Số điện thoại",
+      "address": "Địa chỉ",
+      "wallet": "Địa chỉ ví người bán",
+      "copied": "Đã copy",
+      "copy_btn": "Copy địa chỉ ví"
+    },
+    "status": {
+      "pending": "Đang chờ",
+      "paid": "Đã thanh toán",
+      "expired": "Hết hạn",
+      "mismatch": "Cần kiểm tra",
+      "unknown": "Không rõ"
+    },
+    "voice": {
+      "status": {
+        "connecting_lbl": "Đang kết nối",
+        "connecting_desc": "Đang mở kênh voice với ShopTalk AI.",
+        "connected_lbl": "Đang lắng nghe",
+        "connected_desc": "Transcript sẽ được ghi vào luồng chat.",
+        "reconnecting_lbl": "Đang kết nối lại",
+        "reconnecting_desc": "Giữ màn hình này mở trong khi hệ thống khôi phục kênh voice.",
+        "failed_lbl": "Lỗi kết nối",
+        "failed_desc": "Không thể mở kênh voice. Vui lòng làm mới trang hoặc thử lại.",
+        "speaking_lbl": "Đang nói",
+        "speaking_desc": "Tin nhắn voice đang được chuyển thành transcript.",
+        "listening_lbl": "Đang lắng nghe",
+        "listening_desc": "ShopTalk sẵn sàng nhận giọng nói từ khách.",
+        "disconnected_lbl": "Chưa kết nối",
+        "disconnected_desc": "Bắt đầu voice call khi khách muốn tư vấn bằng giọng nói."
+      },
+      "muted": "Mic tắt",
+      "session": "Voice session",
+      "unmute": "Bật mic",
+      "mute": "Tắt mic",
+      "end_call": "Kết thúc",
+      "call_btn": "Gọi thoại"
+    }
+  }
+}
