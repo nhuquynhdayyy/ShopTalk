@@ -197,6 +197,14 @@ router.get('/:id/check-payment', async (req, res) => {
 
     // 3. Đối soát thành công: Cập nhật cơ sở dữ liệu
     const updatedOrder = await updateOrderStatus(id, 'paid', verification.signature);
+    if (updatedOrder) {
+      try {
+        const { emitOrderPaid } = require('../websocket/socket.server');
+        emitOrderPaid(updatedOrder);
+      } catch (wsErr) {
+        console.error('[Socket.io] Lỗi khi phát sự kiện order_paid từ routes:', wsErr.message);
+      }
+    }
 
     return res.status(200).json({
       success: true,
