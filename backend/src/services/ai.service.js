@@ -13,6 +13,8 @@ const { getIo, isSessionInHandoff, addLiveHandoffSession } = require('../websock
 const db = require('../config/db');
 const fs = require('fs');
 const path = require('path');
+const ChatHistoryModel = require('../models/chatHistory.model');
+const SessionModel = require('../models/session.model');
 
 // Load SYSTEM_PROMPT từ file system-prompt.md (cho text chat)
 let SYSTEM_PROMPT = '';
@@ -363,6 +365,57 @@ const getRepeatEscalation = (sessionId, userMessage) => {
 };
 
 /**
+ * Helper function to save AI reply to database
+ * @param {string} sessionId - Session ID
+ * @param {string} reply - AI response text
+ */
+const saveAIReplyToDB = async (sessionId, reply) => {
+  if (!reply || !UUID_REGEX.test(sessionId)) {
+    return;
+  }
+  
+  try {
+    await ChatHistoryModel.addMessage(sessionId, 'ai', 'text', reply);
+    console.log(`[AI Agent] 💾 Saved AI reply to DB for session ${sessionId}`);
+  } catch (error) {
+    console.error(`[AI Agent] ⚠️ Failed to save AI reply to DB:`, error.message);
+  }
+};
+
+/**
+ * Đảm bảo session tồn tại trong database
+ * @param {string} sessionId - UUID session
+ * @param {string} language - Ngôn ngữ người dùng
+ * @returns {Promise<void>}
+ */
+const ensureSessionExists = async (sessionId, language = 'vi') => {
+  if (!UUID_REGEX.test(sessionId)) {
+    console.warn(`[AI Agent] ⚠️ Invalid sessionId format: ${sessionId}, skipping DB session creation`);
+    return;
+  }
+
+  try {
+    const checkQuery = 'SELECT id FROM sessions WHERE id = $1';
+    const result = await db.query(checkQuery, [sessionId]);
+    
+    if (result.rows.length === 0) {
+      // Session chưa tồn tại, tạo mới
+      const lang = normalizeLanguage(language);
+      await db.query(
+        `INSERT INTO sessions (id, type, status, user_meta, created_at) 
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+         ON CONFLICT (id) DO NOTHING`,
+        [sessionId, 'text', 'active', JSON.stringify({ language: lang })]
+      );
+      console.log(`[AI Agent] 💾 Created new session in DB: ${sessionId}`);
+    }
+  } catch (error) {
+    console.error(`[AI Agent] ❌ Error ensuring session exists:`, error.message);
+    // Không throw error để không block chat flow
+  }
+};
+
+/**
  * Lấy lịch sử tin nhắn của một phiên chat, khởi tạo hoặc cập nhật ngôn ngữ nếu cần
  */
 const buildTextSystemPrompt = async (language) => {
@@ -383,9 +436,40 @@ const getOrCreateSession = async (sessionId, language = 'vi') => {
   const lang = normalizeLanguage(language);
   const systemPrompt = await buildTextSystemPrompt(lang);
 
+  // Đảm bảo session tồn tại trong database
+  await ensureSessionExists(sessionId, lang);
+
+  // Kiểm tra in-memory cache trước
   if (!chatSessions.has(sessionId)) {
-    chatSessions.set(sessionId, [{ role: 'system', content: systemPrompt }]);
-    sessionLanguages.set(sessionId, lang);
+    // Load history từ PostgreSQL
+    try {
+      if (UUID_REGEX.test(sessionId)) {
+        const dbHistory = await ChatHistoryModel.getBySession(sessionId);
+        const messages = [{ role: 'system', content: systemPrompt }];
+        
+        // Chuyển đổi database records sang LLM message format
+        for (const record of dbHistory) {
+          if (record.sender === 'user') {
+            messages.push({ role: 'user', content: record.content });
+          } else if (record.sender === 'ai') {
+            messages.push({ role: 'assistant', content: record.content });
+          }
+        }
+        
+        chatSessions.set(sessionId, messages);
+        sessionLanguages.set(sessionId, lang);
+        console.log(`[AI Agent] 📥 Loaded ${dbHistory.length} messages from DB for session ${sessionId}`);
+      } else {
+        // Non-UUID session, use in-memory only
+        chatSessions.set(sessionId, [{ role: 'system', content: systemPrompt }]);
+        sessionLanguages.set(sessionId, lang);
+      }
+    } catch (error) {
+      console.error(`[AI Agent] ❌ Error loading chat history from DB:`, error.message);
+      // Fallback to in-memory only
+      chatSessions.set(sessionId, [{ role: 'system', content: systemPrompt }]);
+      sessionLanguages.set(sessionId, lang);
+    }
   } else {
     const previousLang = sessionLanguages.get(sessionId);
     if (previousLang !== lang) {
@@ -879,6 +963,7 @@ const tryAutoOrderFlow = async (sessionMessages, sessionId, userMessage, lang) =
       if (parsed.success) {
         const reply = buildQrResendReply(lang, parsed);
         sessionMessages.push({ role: 'assistant', content: reply });
+        await saveAIReplyToDB(sessionId, reply);
         return {
           success: true,
           reply,
@@ -924,6 +1009,7 @@ const tryAutoOrderFlow = async (sessionMessages, sessionId, userMessage, lang) =
     emitEscalationEvent(sessionId, parsed.message || userMessage, parsed.reason || 'tool_escalation');
     const reply = parsed.message || getEscalationReply(lang);
     sessionMessages.push({ role: 'assistant', content: reply });
+    await saveAIReplyToDB(sessionId, reply);
     return {
       success: true,
       reply,
@@ -938,6 +1024,7 @@ const tryAutoOrderFlow = async (sessionMessages, sessionId, userMessage, lang) =
 
   const reply = buildOrderCreatedReply(lang, parsed);
   sessionMessages.push({ role: 'assistant', content: reply });
+  await saveAIReplyToDB(sessionId, reply);
   return {
     success: true,
     reply,
@@ -971,9 +1058,11 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
   if (checkEscalation(userMessage)) {
     // Bắn WebSocket event tới Dashboard để nhân viên biết có khách cần hỗ trợ
     emitEscalationEvent(sessionId, userMessage, 'manual_request');
+    const reply = getEscalationReply(lang, 'manual_request');
+    await saveAIReplyToDB(sessionId, reply);
     return {
       success: true,
-      reply: getEscalationReply(lang, 'manual_request'),
+      reply,
       function_call: null,
       escalate: true
     };
@@ -983,6 +1072,7 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
   if (repeatCheck.shouldEscalate) {
     const reply = getEscalationReply(lang, 'repeated_question');
     emitEscalationEvent(sessionId, userMessage, 'repeated_question');
+    await saveAIReplyToDB(sessionId, reply);
     return {
       success: true,
       reply,
@@ -994,8 +1084,19 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
 
   const sessionMessages = await getOrCreateSession(sessionId, lang);
 
-  // Lưu tin nhắn của người dùng vào context
+  // Lưu tin nhắn của người dùng vào context và database
   sessionMessages.push({ role: 'user', content: userMessage });
+  
+  // Persist user message to PostgreSQL
+  try {
+    if (UUID_REGEX.test(sessionId)) {
+      await ChatHistoryModel.addMessage(sessionId, 'user', 'text', userMessage);
+      console.log(`[AI Agent] 💾 Saved user message to DB for session ${sessionId}`);
+    }
+  } catch (error) {
+    console.error(`[AI Agent] ⚠️ Failed to save user message to DB:`, error.message);
+    // Continue with chat flow even if DB save fails
+  }
 
   const autoOrderResult = await tryAutoOrderFlow(sessionMessages, sessionId, userMessage, lang);
   if (autoOrderResult) {
@@ -1160,6 +1261,7 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
         emitEscalationEvent(sessionId, toolEscalation.message, toolEscalation.reason);
         const reply = toolEscalation.reply;
         sessionMessages.push({ role: 'assistant', content: reply });
+        await saveAIReplyToDB(sessionId, reply);
         return {
           success: true,
           reply,
@@ -1201,6 +1303,10 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
       const assistantContent = assistantMessage.content || '';
       const cleanReply = assistantContent.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
       const { text_reply, function_call } = parseReplyContent(assistantContent);
+      
+      // Save AI reply to database
+      await saveAIReplyToDB(sessionId, cleanReply);
+      
       return {
         success: true,
         reply: cleanReply,
@@ -1219,6 +1325,10 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
       const assistantContent = assistantMessage.content || '';
       const cleanReply = assistantContent.replace(/<function=.*?>.*?<\/function>/gs, '').trim();
       const { text_reply, function_call } = parseReplyContent(assistantContent);
+      
+      // Save AI reply to database
+      await saveAIReplyToDB(sessionId, cleanReply);
+      
       return {
         success: true,
         reply: cleanReply,
@@ -1746,9 +1856,34 @@ const triggerAgentSpeak = async (sessionId, text) => {
   }
 };
 
-const getSessionHistory = (sessionId) => {
-  if (!chatSessions.has(sessionId)) return [];
-  return chatSessions.get(sessionId);
+const getSessionHistory = async (sessionId) => {
+  if (!UUID_REGEX.test(sessionId)) {
+    // Non-UUID session, return in-memory only
+    if (!chatSessions.has(sessionId)) return [];
+    return chatSessions.get(sessionId);
+  }
+  
+  // For UUID sessions, always read from database for consistency
+  try {
+    const dbHistory = await ChatHistoryModel.getBySession(sessionId);
+    const messages = [];
+    
+    // Convert database records to message format
+    for (const record of dbHistory) {
+      if (record.sender === 'user') {
+        messages.push({ role: 'user', content: record.content, timestamp: record.timestamp });
+      } else if (record.sender === 'ai') {
+        messages.push({ role: 'assistant', content: record.content, timestamp: record.timestamp });
+      }
+    }
+    
+    return messages;
+  } catch (error) {
+    console.error(`[AI Agent] ❌ Error loading history from DB:`, error.message);
+    // Fallback to in-memory
+    if (!chatSessions.has(sessionId)) return [];
+    return chatSessions.get(sessionId);
+  }
 };
 
 const addSystemMessageToSession = (sessionId, content) => {

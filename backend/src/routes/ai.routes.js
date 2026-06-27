@@ -3,6 +3,8 @@ const router = express.Router();
 const crypto = require('crypto');
 const { chat, generateAgoraToken, startAgoraAgent, getSessionHistory } = require('../services/ai.service');
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
  * Route: POST /chat
  * Mô tả: Gửi tin nhắn chat tới AI Sales Agent của ShopTalk.
@@ -22,8 +24,8 @@ router.post('/chat', async (req, res) => {
       });
     }
 
-    // Nếu chưa có sessionId, sinh mới một UUID ngẫu nhiên để theo dõi phiên (multi-turn context)
-    if (!sessionId) {
+    // Nếu chưa có sessionId hoặc không phải UUID hợp lệ, sinh mới một UUID ngẫu nhiên để theo dõi phiên (multi-turn context)
+    if (!sessionId || !UUID_REGEX.test(sessionId)) {
       sessionId = crypto.randomUUID();
     }
 
@@ -70,10 +72,16 @@ router.post('/reset-session', (req, res) => {
  * Route: GET /history/:sessionId
  * Mô tả: Lấy lịch sử chat của một session (lọc bỏ system messages).
  */
-router.get('/history/:sessionId', (req, res) => {
+router.get('/history/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const history = getSessionHistory(sessionId);
+    if (!sessionId || !UUID_REGEX.test(sessionId)) {
+      return res.status(200).json({
+        success: true,
+        history: []
+      });
+    }
+    const history = await getSessionHistory(sessionId);
     // Lọc bớt system prompt đi để client hiển thị sạch đẹp
     const cleanHistory = history.filter(msg => msg.role !== 'system');
     return res.status(200).json({
