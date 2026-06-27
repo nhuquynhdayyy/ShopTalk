@@ -482,6 +482,15 @@ const executeTool = async (name, args = {}, sessionId = null) => {
           });
         }
 
+        if (productResult.stock <= 0) {
+          return JSON.stringify({
+            success: false,
+            message: language === 'en'
+              ? `I am sorry, "${productResult.name}" is currently out of stock.`
+              : `Dạ em rất tiếc, sản phẩm "${productResult.name}" hiện đã hết hàng.`
+          });
+        }
+
         const threshold = getOrderEscalationThreshold();
         const orderAmount = Number(args.amount || productResult.price_usdc);
 

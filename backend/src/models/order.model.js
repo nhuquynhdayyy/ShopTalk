@@ -38,10 +38,34 @@ const createOrder = async (orderData) => {
     items_list ? (typeof items_list === 'string' ? items_list : JSON.stringify(items_list)) : null
   ];
 
+  const ProductModel = require('./product.model');
+  let product = null;
+  try {
+    product = await ProductModel.findByNameOrSku(product_name);
+    if (product) {
+      if (product.stock < 1) {
+        throw new Error('Out of stock');
+      }
+    }
+  } catch (err) {
+    if (err.message === 'Out of stock') {
+      throw err;
+    }
+    console.error('[Inventory] Lỗi khi kiểm tra tồn kho trước khi tạo đơn:', err.message);
+  }
+
   try {
     const res = await db.query(queryText, values);
     const newOrder = res.rows[0];
     if (newOrder) {
+      if (product) {
+        try {
+          await ProductModel.decrementStock(product.id, 1);
+          console.log(`[Inventory] Reserved 1 unit of "${product.name}" (SKU: ${product.sku}) for pending order #${newOrder.id}. Remaining stock: ${product.stock - 1}`);
+        } catch (stockErr) {
+          console.error(`[Inventory] Lỗi khi trừ stock sản phẩm ${product.name}:`, stockErr.message);
+        }
+      }
       try {
         const { emitNewOrder } = require('../websocket/socket.server');
         emitNewOrder(newOrder);
@@ -117,6 +141,9 @@ const getOrderByTxSignature = async (txSignature) => {
  * @returns {Promise<Object|null>} Đơn hàng đã cập nhật hoặc null nếu không tìm thấy đơn hàng
  */
 const updateOrderStatus = async (id, status, txSignature = null) => {
+  const currentOrder = await getOrderById(id);
+  if (!currentOrder) return null;
+
   if (txSignature) {
     const existingOrder = await getOrderByTxSignature(txSignature);
     if (existingOrder && existingOrder.id !== id) {
@@ -146,6 +173,19 @@ const updateOrderStatus = async (id, status, txSignature = null) => {
     const res = await db.query(queryText, [id, status, txSignature]);
     const updatedOrder = res.rows[0] || null;
     if (updatedOrder) {
+      if (status === 'expired' && currentOrder.status !== 'expired') {
+        try {
+          const ProductModel = require('./product.model');
+          const product = await ProductModel.findByNameOrSku(updatedOrder.product_name);
+          if (product) {
+            const updatedProduct = await ProductModel.incrementStock(product.id, 1);
+            console.log(`[Order Model] Restored stock for product "${product.name}" (SKU: ${product.sku}) because order #${id} expired. New stock: ${updatedProduct.stock}`);
+          }
+        } catch (stockErr) {
+          console.error('[Order Model] Lỗi khi hoàn lại stock cho đơn hàng hết hạn:', stockErr.message);
+        }
+      }
+
       try {
         const { getIo } = require('../websocket/socket.server');
         const io = getIo();

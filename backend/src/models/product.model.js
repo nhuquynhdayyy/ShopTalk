@@ -77,6 +77,67 @@ class ProductModel {
       throw error;
     }
   }
+
+  /**
+   * Tìm sản phẩm theo tên canonical hoặc SKU
+   * @param {string} nameOrSku - Tên hoặc SKU sản phẩm
+   * @returns {Promise<Object|null>} Sản phẩm được tìm thấy hoặc null
+   */
+  static async findByNameOrSku(nameOrSku) {
+    if (!nameOrSku) return null;
+    const queryText = 'SELECT * FROM products WHERE name = $1 OR sku = $2;';
+    try {
+      const res = await db.query(queryText, [nameOrSku, nameOrSku]);
+      return res.rows[0] ? ProductModel.parseJSONBFields(res.rows[0]) : null;
+    } catch (error) {
+      console.error(`Lỗi trong ProductModel.findByNameOrSku với ${nameOrSku}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Giảm tồn kho sản phẩm đi 1 lượng (không xuống dưới 0)
+   * @param {string} id - UUID của sản phẩm
+   * @param {number} amount - Số lượng giảm
+   * @returns {Promise<Object|null>} Sản phẩm đã cập nhật hoặc null
+   */
+  static async decrementStock(id, amount = 1) {
+    const queryText = `
+      UPDATE products 
+      SET stock = GREATEST(0, stock - $2), updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $1 
+      RETURNING *;
+    `;
+    try {
+      const res = await db.query(queryText, [id, amount]);
+      return res.rows[0] ? ProductModel.parseJSONBFields(res.rows[0]) : null;
+    } catch (error) {
+      console.error(`Lỗi trong ProductModel.decrementStock với ID ${id}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Tăng tồn kho sản phẩm thêm 1 lượng
+   * @param {string} id - UUID của sản phẩm
+   * @param {number} amount - Số lượng tăng
+   * @returns {Promise<Object|null>} Sản phẩm đã cập nhật hoặc null
+   */
+  static async incrementStock(id, amount = 1) {
+    const queryText = `
+      UPDATE products 
+      SET stock = stock + $2, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $1 
+      RETURNING *;
+    `;
+    try {
+      const res = await db.query(queryText, [id, amount]);
+      return res.rows[0] ? ProductModel.parseJSONBFields(res.rows[0]) : null;
+    } catch (error) {
+      console.error(`Lỗi trong ProductModel.incrementStock với ID ${id}:`, error.message);
+      throw error;
+    }
+  }
 }
 
 module.exports = ProductModel;
