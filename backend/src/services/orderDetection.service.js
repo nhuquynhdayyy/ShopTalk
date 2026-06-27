@@ -1,4 +1,11 @@
 const { getProducts, normalizeLanguage } = require('./inventory.service');
+const Groq = require('groq-sdk');
+let groq;
+try {
+  groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+} catch (e) {
+  console.warn('[OrderDetection] Failed to initialize Groq SDK:', e.message);
+}
 
 const BUY_INTENT_KEYWORDS = [
   'mua', 'đặt hàng', 'dat hang', 'chốt', 'chot', 'order', 'buy', 'purchase',
@@ -191,8 +198,102 @@ const wantsQrResend = (userMessage) => {
   return mentionsQr && wantsAgain;
 };
 
+/**
+ * Gọi LLM để phân tích hội thoại và trích xuất thông tin khách hàng chốt đơn hàng
+ */
+const detectOrder = async (messages, language = 'vi') => {
+  const lang = normalizeLanguage(language);
+  
+  // 1. Chạy hoặc lấy fallback detect bằng Regex trước
+  const fallback = await fallbackDetectOrder(messages, language);
+  let detection = { ...fallback };
+
+  // 2. Nếu khách hàng có ý định mua, gọi LLM để trích xuất cấu trúc chính xác
+  if (fallback.hasBuyIntent && groq) {
+    try {
+      const recentMessages = (messages || []).filter(m => m.role !== 'system').slice(-20);
+      const products = await getProducts(language);
+      const productMap = products
+        .map(p => `- "${p.name}": ${p.price_usdc}`)
+        .join('\n');
+      
+      const prompt = `Phân tích lịch sử trò chuyện chat bằng văn bản giữa khách hàng (user) và trợ lý bán hàng (assistant) để trích xuất thông tin đặt đơn hàng.
+Hãy trả về một đối tượng JSON duy nhất (không có mã markdown hay ký tự thừa nào khác ngoài JSON):
+{
+  "hasBuyIntent": <true/false, khách hàng đã xác nhận đồng ý/chốt mua hàng>,
+  "hasName": <true/false, khách hàng đã cung cấp tên người nhận cụ thể>,
+  "hasPhone": <true/false, khách hàng đã cung cấp số điện thoại liên hệ cụ thể>,
+  "hasAddress": <true/false, khách hàng đã cung cấp địa chỉ giao hàng cụ thể nhận hàng>,
+  "productName": <tên sản phẩm khách chọn mua (chính xác từ danh sách dưới), hoặc null nếu không rõ>,
+  "amount": <giá sản phẩm (number), hoặc null nếu không rõ>,
+  "customerName": <tên người nhận đã cung cấp, hoặc null nếu không rõ>,
+  "customerPhone": <số điện thoại liên hệ đã cung cấp, hoặc null nếu không rõ>,
+  "customerAddress": <địa chỉ giao hàng đã cung cấp, hoặc null nếu không rõ>
+}
+
+Danh sách sản phẩm & giá hiện có trong kho:
+${productMap}`;
+
+      const chatCompletion = await groq.chat.completions.create({
+        model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: JSON.stringify(recentMessages.map(m => ({ role: m.role, content: m.content }))) }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.1
+      });
+
+      const resultText = chatCompletion.choices[0]?.message?.content;
+      if (resultText) {
+        const llmRes = JSON.parse(resultText);
+        
+        if (llmRes.hasBuyIntent !== undefined) detection.hasBuyIntent = llmRes.hasBuyIntent || detection.hasBuyIntent;
+        
+        if (llmRes.customerName) {
+          detection.customerName = llmRes.customerName;
+          detection.hasName = true;
+        }
+        if (llmRes.customerPhone) {
+          detection.customerPhone = String(llmRes.customerPhone).replace(/\s/g, '');
+          detection.hasPhone = true;
+        }
+        if (llmRes.customerAddress) {
+          detection.customerAddress = llmRes.customerAddress;
+          detection.hasAddress = true;
+        }
+        if (llmRes.productName) {
+          detection.productName = llmRes.productName;
+          if (llmRes.amount) {
+            detection.amount = parseFloat(llmRes.amount);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[OrderDetection] Lỗi khi gọi LLM để detect order:', err.message);
+    }
+  }
+
+  // Khôi phục thông tin nếu LLM bị sót
+  if (!detection.customerName && fallback.customerName) {
+    detection.customerName = fallback.customerName;
+    detection.hasName = true;
+  }
+  if (!detection.customerPhone && fallback.customerPhone) {
+    detection.customerPhone = fallback.customerPhone;
+    detection.hasPhone = true;
+  }
+  if (!detection.customerAddress && fallback.customerAddress) {
+    detection.customerAddress = fallback.customerAddress;
+    detection.hasAddress = true;
+  }
+
+  return detection;
+};
+
 module.exports = {
   fallbackDetectOrder,
+  detectOrder,
   wantsQrResend,
   extractInlineCustomerInfo
 };

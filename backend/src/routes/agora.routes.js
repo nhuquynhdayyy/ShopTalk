@@ -13,6 +13,8 @@ const {
 } = require('../services/ai.service');
 const { getProducts, checkInventory, formatProductCatalogForPrompt } = require('../services/inventory.service');
 
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
 /**
  * 1. Handler tạo Token cho Frontend (Sửa lỗi 404 và ReferenceError)
  */
@@ -98,7 +100,7 @@ Danh sách sản phẩm & giá hiện có trong kho:
 ${productMap}`;
 
     const chatCompletion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+      model: GROQ_MODEL,
       messages: [
         { role: 'system', content: prompt },
         { role: 'user', content: JSON.stringify(recentMessages.map(m => ({ role: m.role, content: m.content }))) }
@@ -326,7 +328,7 @@ const llmWebhookHandler = async (req, res) => {
           id: 'voice-escalate-' + Date.now(),
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
-          model: 'llama-3.1-8b-instant',
+          model: GROQ_MODEL,
           choices: [
             {
               index: 0,
@@ -341,7 +343,7 @@ const llmWebhookHandler = async (req, res) => {
           id: 'voice-escalate-' + Date.now(),
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
-          model: 'llama-3.1-8b-instant',
+          model: GROQ_MODEL,
           choices: [
             {
               index: 0,
@@ -359,7 +361,7 @@ const llmWebhookHandler = async (req, res) => {
           id: 'voice-escalate-' + Date.now(),
           object: 'chat.completion',
           created: Math.floor(Date.now() / 1000),
-          model: 'llama-3.1-8b-instant',
+          model: GROQ_MODEL,
           choices: [{
             message: { role: 'assistant', content: speakText },
             index: 0,
@@ -486,7 +488,7 @@ ${productListPrompt}
               id: 'voice-addr-verify-' + Date.now(),
               object: 'chat.completion.chunk',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [
                 {
                   index: 0,
@@ -501,7 +503,7 @@ ${productListPrompt}
               id: 'voice-addr-verify-' + Date.now(),
               object: 'chat.completion.chunk',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [
                 {
                   index: 0,
@@ -519,7 +521,7 @@ ${productListPrompt}
               id: 'voice-addr-verify-' + Date.now(),
               object: 'chat.completion',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [{
                 message: { role: 'assistant', content: speakText },
                 index: 0,
@@ -571,7 +573,7 @@ ${productListPrompt}
               id: 'voice-order-fail-' + Date.now(),
               object: 'chat.completion.chunk',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [
                 {
                   index: 0,
@@ -586,7 +588,7 @@ ${productListPrompt}
               id: 'voice-order-fail-' + Date.now(),
               object: 'chat.completion.chunk',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [
                 {
                   index: 0,
@@ -604,7 +606,7 @@ ${productListPrompt}
               id: 'voice-order-fail-' + Date.now(),
               object: 'chat.completion',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [{
                 message: { role: 'assistant', content: speakText },
                 index: 0,
@@ -671,7 +673,7 @@ ${productListPrompt}
               id: 'voice-order-fail-' + Date.now(),
               object: 'chat.completion.chunk',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [
                 {
                   index: 0,
@@ -686,7 +688,7 @@ ${productListPrompt}
               id: 'voice-order-fail-' + Date.now(),
               object: 'chat.completion.chunk',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [
                 {
                   index: 0,
@@ -704,7 +706,7 @@ ${productListPrompt}
               id: 'voice-order-fail-' + Date.now(),
               object: 'chat.completion',
               created: Math.floor(Date.now() / 1000),
-              model: 'llama-3.1-8b-instant',
+              model: GROQ_MODEL,
               choices: [{
                 message: { role: 'assistant', content: speakText },
                 index: 0,
@@ -765,7 +767,7 @@ ${productListPrompt}
             id: 'voice-order-' + Date.now(),
             object: 'chat.completion.chunk',
             created: Math.floor(Date.now() / 1000),
-            model: 'llama-3.1-8b-instant',
+            model: GROQ_MODEL,
             choices: [
               {
                 index: 0,
@@ -782,7 +784,7 @@ ${productListPrompt}
             id: 'voice-order-' + Date.now(),
             object: 'chat.completion.chunk',
             created: Math.floor(Date.now() / 1000),
-            model: 'llama-3.1-8b-instant',
+            model: GROQ_MODEL,
             choices: [
               {
                 index: 0,
@@ -800,7 +802,7 @@ ${productListPrompt}
             id: 'voice-order-' + Date.now(),
             object: 'chat.completion',
             created: Math.floor(Date.now() / 1000),
-            model: 'llama-3.1-8b-instant',
+            model: GROQ_MODEL,
             choices: [{
               message: {
                 role: 'assistant',
@@ -823,8 +825,8 @@ ${productListPrompt}
       res.setHeader('Connection', 'keep-alive');
 
       const streamResponse = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant',
-        messages: getSlidingWindow(messages, 10),
+        model: GROQ_MODEL,
+        messages: getSlidingWindow(messages, 6),
         max_tokens: 100,
         temperature: 0.6,
         stream: true
@@ -858,8 +860,8 @@ ${productListPrompt}
 
     } else {
       const response = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant',
-        messages: getSlidingWindow(messages, 10),
+        model: GROQ_MODEL,
+        messages: getSlidingWindow(messages, 6),
         max_tokens: 100,
         temperature: 0.6,
       });
@@ -916,7 +918,7 @@ ${productListPrompt}
         id: 'fallback-' + Date.now(),
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
-        model: 'llama-3.1-8b-instant',
+        model: GROQ_MODEL,
         choices: [{
           message: {
             role: 'assistant',

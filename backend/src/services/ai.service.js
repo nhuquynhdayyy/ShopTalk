@@ -8,7 +8,7 @@ const { checkInventory, normalize, formatProductCatalogForPrompt, resolveProduct
 const axios = require('axios');
 const { createOrder, getOrderById } = require('../models/order.model');
 const { createPaymentRequest, generateQRCode } = require('./solanaPay.service');
-const { fallbackDetectOrder, wantsQrResend } = require('./orderDetection.service');
+const { fallbackDetectOrder, wantsQrResend, detectOrder } = require('./orderDetection.service');
 const { getIo, isSessionInHandoff, addLiveHandoffSession } = require('../websocket/socket.server');
 const db = require('../config/db');
 const fs = require('fs');
@@ -238,7 +238,47 @@ const validateToolArgs = (name, args, language = 'vi') => {
 
   // Chặn tạo đơn nếu địa chỉ không hợp lệ hoặc nghe nhầm
   if (name === 'create_order') {
-    const address = args.customer_address || '';
+    const { customer_name, customer_phone, customer_address } = args;
+    
+    // Check if name is generic / placeholder
+    const nameLower = (customer_name || '').toLowerCase().trim();
+    const isNameInvalid = !nameLower || 
+      nameLower.length < 2 || 
+      ['unknown', 'n/a', 'na', 'null', 'none', 'placeholder', 'customer', 'guest', 'user', 'buyer', 'khách hàng', 'khách', 'người nhận', 'áo thun', 'tshirt', 't-shirt', 'hoodie'].includes(nameLower);
+
+    // Check if phone is generic / placeholder
+    const phoneClean = (customer_phone || '').replace(/\s/g, '');
+    const isPhoneInvalid = !phoneClean || 
+      phoneClean.length < 9 || // Vietnam phone number is at least 9-10 digits
+      /^[0-9]\d{4}$/.test(phoneClean) || // too short
+      /^(.)\1+$/.test(phoneClean) || // e.g. 0000000000, 1111111111
+      phoneClean.toLowerCase().includes('unknown') ||
+      phoneClean.toLowerCase().includes('na') ||
+      phoneClean.toLowerCase().includes('null');
+
+    // Check if address is generic / placeholder
+    const addressLower = (customer_address || '').toLowerCase().trim();
+    const isAddressInvalid = !addressLower || 
+      addressLower.length < 5 || // too short for a real address
+      ['unknown', 'n/a', 'na', 'null', 'none', 'placeholder', 'vietnam', 'việt nam', 'hà nội', 'sài gòn', 'đà nẵng'].includes(addressLower);
+
+    const placeholders = [];
+    if (isNameInvalid) placeholders.push('customer_name');
+    if (isPhoneInvalid) placeholders.push('customer_phone');
+    if (isAddressInvalid) placeholders.push('customer_address');
+
+    if (placeholders.length > 0) {
+      const message = language === 'en'
+        ? `Invalid value for required parameter(s): ${placeholders.join(', ')}. Do not hallucinate or use placeholder values. You MUST ask the customer for their real information (Name, Phone, Address) first.`
+        : `Giá trị không hợp lệ cho tham số: ${placeholders.join(', ')}. Không tự bịa thông tin hoặc dùng giá trị mặc định. Bạn BẮT BUỘC phải hỏi xin thông tin thật của khách hàng trước.`;
+
+      return {
+        valid: false,
+        result: buildToolValidationError(name, placeholders, message)
+      };
+    }
+
+    const address = customer_address || '';
     const words = address.trim().split(/\s+/).filter(Boolean);
     const normalized = address.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
     const blacklistPatterns = [/nhu quan/i, /nha quan/i];
@@ -275,18 +315,56 @@ const isGroqToolCallError = (errorPayload) => {
     Boolean(errorPayload?.failed_generation);
 };
 
-const callChatCompletions = async (apiUrl, apiKey, payload) => {
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(payload)
-  });
+const callChatCompletions = async (apiUrl, apiKey, payload, retries = 3, delay = 2000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
 
-  const data = await response.json();
-  return { response, data };
+      const data = await response.json();
+
+      const isRateLimit = response.status === 429 || 
+        (data && data.error && (
+          data.error.message?.includes('Rate limit') || 
+          data.error.message?.includes('rate limit') || 
+          data.error.message?.includes('TPM') || 
+          data.error.message?.includes('429')
+        ));
+
+      if (isRateLimit && i < retries - 1) {
+        let waitTime = delay;
+        const retryAfterHeader = typeof response.headers?.get === 'function' ? response.headers.get('retry-after') : null;
+        if (retryAfterHeader) {
+          waitTime = parseInt(retryAfterHeader, 10) * 1000 + 500;
+          console.warn(`[AI Agent] ⏳ Parsed retry-after header: ${waitTime}ms`);
+        } else if (data && data.error && data.error.message) {
+          const match = data.error.message.match(/try again in ([\d.]+)s/i);
+          if (match && match[1]) {
+            waitTime = Math.ceil(parseFloat(match[1]) * 1000) + 1000; // Add 1s safety buffer
+            console.warn(`[AI Agent] ⏳ Parsed rate limit cooldown from error message: ${waitTime}ms`);
+          }
+        }
+        
+        console.warn(`[AI Agent] ⏳ Rate limit hit (Status: ${response.status}). Retrying in ${waitTime}ms... (Attempt ${i + 1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        delay = waitTime * 2;
+        continue;
+      }
+
+      return { response, data };
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      console.warn(`[AI Agent] ⏳ Connection error: ${err.message}. Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2;
+    }
+  }
 };
 
 const normalizeUserQuestion = (text) => normalize(text)
@@ -849,7 +927,7 @@ const tryAutoOrderFlow = async (sessionMessages, sessionId, userMessage, lang) =
     return null;
   }
 
-  const detection = await fallbackDetectOrder(sessionMessages, lang);
+  const detection = await detectOrder(sessionMessages, lang);
   if (!detection.hasBuyIntent || !detection.hasName || !detection.hasPhone || !detection.hasAddress) {
     return null;
   }
@@ -986,7 +1064,7 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
   try {
     const basePayload = {
       model: modelName,
-      messages: getSlidingWindow(sessionMessages, 10),
+      messages: getSlidingWindow(sessionMessages, 6),
       temperature: 0.4
     };
 
@@ -1135,7 +1213,7 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
       }
       ({ data } = await callChatCompletions(apiUrl, apiKey, {
         model: nextModel,
-        messages: getSlidingWindow(sessionMessages, 10),
+        messages: getSlidingWindow(sessionMessages, 6),
         temperature: 0.4,
         tools: OPENAI_TOOLS,
         tool_choice: 'auto',
