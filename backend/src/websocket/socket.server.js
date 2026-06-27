@@ -77,6 +77,26 @@ const emitOrderPaid = (order) => {
   return emitSocketEvent('order_paid', payload);
 };
 
+const emitNewOrder = (order) => {
+  const payload = {
+    id: order.id,
+    reference: order.reference,
+    product_name: order.product_name,
+    amount: Number(order.amount),
+    seller_wallet: order.seller_wallet,
+    status: order.status || 'pending',
+    created_at: order.created_at instanceof Date ? order.created_at.toISOString() : order.created_at,
+    expires_at: order.expires_at instanceof Date ? order.expires_at.toISOString() : order.expires_at,
+    customer_name: order.customer_name || null,
+    customer_phone: order.customer_phone || null,
+    customer_address: order.customer_address || null,
+    items_list: order.items_list || null
+  };
+
+  console.log(`[Socket.io] Emitting new_order globally, orderId: ${order.id}`);
+  return emitSocketEvent('new_order', payload);
+};
+
 const emitTranscriptReceived = ({ sessionId, sender, transcript, type = 'voice', id, timestamp = new Date().toISOString() }) => (
   emitSocketEvent('transcript_received', {
     sessionId,
@@ -236,6 +256,7 @@ module.exports = {
   initSocket,
   getIo,
   emitSocketEvent,
+  emitNewOrder,
   emitOrderPaid,
   emitTranscriptReceived,
   emitEscalationRequest,

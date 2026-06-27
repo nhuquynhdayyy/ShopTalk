@@ -40,7 +40,16 @@ const createOrder = async (orderData) => {
 
   try {
     const res = await db.query(queryText, values);
-    return res.rows[0];
+    const newOrder = res.rows[0];
+    if (newOrder) {
+      try {
+        const { emitNewOrder } = require('../websocket/socket.server');
+        emitNewOrder(newOrder);
+      } catch (wsErr) {
+        console.error('[Socket.io] Lỗi khi phát sự kiện new_order:', wsErr.message);
+      }
+    }
+    return newOrder;
   } catch (error) {
     console.error('Lỗi trong createOrder:', error.message);
     throw error;

@@ -62,9 +62,9 @@ const mockOrders = [
 
 const sortOrders = (orders) => (
   [...orders].sort((a, b) => {
-    if (a.status === 'paid' && b.status !== 'paid') return -1;
-    if (a.status !== 'paid' && b.status === 'paid') return 1;
-    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    const dateA = new Date(a.created_at || a.createdAt || 0);
+    const dateB = new Date(b.created_at || b.createdAt || 0);
+    return dateB - dateA;
   })
 );
 
@@ -72,10 +72,6 @@ const mergeOrder = (orders, incomingOrder) => {
   const existing = orders.find((order) => order.id === incomingOrder.id);
   const merged = { ...existing, ...incomingOrder };
   const rest = orders.filter((order) => order.id !== incomingOrder.id);
-
-  if (merged.status === 'paid') {
-    return [merged, ...rest];
-  }
 
   return sortOrders([merged, ...rest]);
 };
@@ -130,6 +126,7 @@ function Dashboard() {
   const [chatInputText, setChatInputText] = useState('');
   const chatScrollRef = useRef(null);
   const ordersRef = useRef(orders);
+  const processedPaidAlertsRef = useRef(new Set());
 
   useEffect(() => {
     ordersRef.current = orders;
@@ -190,11 +187,14 @@ function Dashboard() {
 
   const handleOrderStatusUpdated = useCallback((updatedOrder) => {
     const previousOrder = ordersRef.current.find((order) => order.id === updatedOrder.id);
-    const becamePaid = updatedOrder.status === 'paid' && previousOrder?.status !== 'paid';
+    const becamePaid = updatedOrder.status === 'paid' && 
+                       previousOrder?.status !== 'paid' && 
+                       !processedPaidAlertsRef.current.has(updatedOrder.id);
 
     setOrders((current) => mergeOrder(current, updatedOrder));
 
     if (becamePaid) {
+      processedPaidAlertsRef.current.add(updatedOrder.id);
       playChime();
       const localizedOrder = localizeOrder(updatedOrder, currentLang);
       setPaidAlert({
@@ -210,6 +210,14 @@ function Dashboard() {
     const paidOrder = normalizePaidOrder(payload, t);
     handleOrderStatusUpdated(paidOrder);
   }, [handleOrderStatusUpdated, t]);
+
+  const handleNewOrder = useCallback((newOrder) => {
+    const nextOrder = normalizeOrderFlags(newOrder);
+    setOrders((current) => {
+      if (current.some((order) => order.id === nextOrder.id)) return current;
+      return sortOrders([nextOrder, ...current]);
+    });
+  }, []);
 
   const handleEscalationRequest = useCallback((payload) => {
     const escalation = {
@@ -251,6 +259,7 @@ function Dashboard() {
   const socketState = useWebSocket({
     order_status_updated: handleOrderStatusUpdated,
     order_paid: handleOrderPaid,
+    new_order: handleNewOrder,
     escalation_request: handleEscalationRequest,
     live_message: handleLiveMessage
   });

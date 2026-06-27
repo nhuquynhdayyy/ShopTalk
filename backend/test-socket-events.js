@@ -12,6 +12,7 @@
 const assert = require('assert');
 const {
   emitOrderPaid,
+  emitNewOrder,
   emitTranscriptReceived,
   emitEscalationRequest,
   emitPaymentReminder,
@@ -200,6 +201,35 @@ test('timestamp tự sinh (transcript_received) phải là ISO 8601 hợp lệ',
 
   const { timestamp } = mockIo.calls[0].payload;
   assert.ok(!Number.isNaN(Date.parse(timestamp)), `timestamp "${timestamp}" không parse được thành Date`);
+});
+
+// ─── 7. emitNewOrder ──────────────────────────────────────────────────────────
+
+test('emitNewOrder: bắn đúng event new_order và map đúng field + types', () => {
+  const mockIo = createMockIo();
+  __setIoForTest(mockIo);
+
+  const testDate = new Date();
+  emitNewOrder({
+    id: 'order-100',
+    reference: 'ref-100',
+    product_name: 'Sản phẩm mới',
+    amount: '99.950000',
+    seller_wallet: 'wallet-100',
+    status: 'pending',
+    created_at: testDate,
+    expires_at: testDate,
+    customer_name: 'Khách 100'
+  });
+
+  assert.strictEqual(mockIo.calls.length, 1);
+  const { eventName, payload } = mockIo.calls[0];
+  assert.strictEqual(eventName, 'new_order');
+  assert.strictEqual(payload.id, 'order-100');
+  assert.strictEqual(payload.amount, 99.95);
+  assert.strictEqual(payload.created_at, testDate.toISOString());
+  assert.strictEqual(payload.expires_at, testDate.toISOString());
+  assert.strictEqual(payload.customer_name, 'Khách 100');
 });
 
 // ─── Kết quả ─────────────────────────────────────────────────────────────────
