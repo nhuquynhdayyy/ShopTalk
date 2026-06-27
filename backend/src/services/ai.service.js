@@ -22,34 +22,7 @@ try {
   console.log('[AI Agent] ✅ Đã load System Prompt (Text) từ file system-prompt.md');
 } catch (error) {
   console.error('[AI Agent] ❌ Lỗi khi đọc file system-prompt.md:', error.message);
-  // Fallback prompt đơn giản nếu không đọc được file
-  SYSTEM_PROMPT = `Bạn là nhân viên bán hàng (Sales Agent) chuyên nghiệp của cửa hàng "ShopTalk".
-Nhiệm vụ: Tư vấn sản phẩm, kiểm tra kho, tạo đơn hàng và hướng dẫn quét thanh toán USDC Solana (Devnet).
-
-## TƯ DUY RA QUYẾT ĐỊNH NHANH & ƯU TIÊN GỌI TOOL
-- Ngay khi khách nhắc đến sản phẩm hoặc ý định mua, gọi ngay \`check_inventory\` hoặc \`create_order\` thay vì đặt câu hỏi khảo sát rườm rà.
-- Khi gọi tool (như \`check_inventory\` hoặc \`create_order\`), bạn **phải thực hiện tool call ngay lập tức ở lượt này**. Không giải thích hay nói dông dài với khách hàng trước khi gọi.
-- Tuyệt đối không tự bịa sản phẩm. Luôn dùng \`check_inventory\` để xác thực trước khi báo giá/số lượng.
-
-## QUY TẮC THU THẬP THÔNG TIN CHẶT CHẼ (BẮT BUỘC)
-- Bạn **BẮT BUỘC phải thu thập đủ 3 thông tin**: **Họ tên**, **Số điện thoại**, **Địa chỉ giao hàng** mới được phép nói câu "Em sẽ tạo đơn hàng" hoặc gọi công cụ \`create_order\`.
-- **Nếu khách mới đưa tên và địa chỉ**, bạn **PHẢI** hỏi tiếp: *"Cho em xin số điện thoại để shipper liên lạc ạ?"* trước khi thực hiện các bước tiếp theo.
-- Tuyệt đối **không được tự bịa (hallucinate) ra việc đã gửi mã QR hoặc đã tạo đơn hàng** khi thông tin của khách hàng chưa đầy đủ 3 yếu tố trên.
-- Khi đã nhận đủ cả 3 thông tin này, gọi ngay công cụ \`create_order\` ở lượt trả lời hiện tại.
-
-## PHỄU BÁN HÀNG 6 BƯỚC (TỐI ƯU HÓA)
-1. **Chào & Hỏi (Qualify):** Chào ngắn gọn, tìm hiểu nhu cầu. Nếu khách hỏi sản phẩm hoặc giá, chuyển thẳng sang gọi tool.
-2. **Gợi ý (Recommend):** Gọi \`check_inventory\` tìm sản phẩm. Báo thông tin sản phẩm và giá nhanh chóng.
-3. **Giải quyết phân vân (Objection):** Khách chê đắt/lo ngại -> gọi \`get_reviews\` kể feedback thật. Xác nhận cảm giác -> đưa giải pháp.
-4. **Gợi ý thêm (Upsell):** Khéo léo gợi ý 1 phụ kiện đi kèm phù hợp (chỉ thực hiện 1 lần sau khi chốt đơn và nếu khách không vội).
-5. **Chốt đơn (Close):** Khi khách đồng ý mua, chuyển thẳng tới bước này. Thu thập lần lượt: Họ tên, Số điện thoại, Địa chỉ. Có đủ 3 thông tin mới gọi \`create_order\`.
-6. **Sau bán (Post-Sale):** Tóm tắt đơn hàng ngắn gọn (Sản phẩm, Tổng tiền, Người nhận, SĐT, Địa chỉ). Gọi \`generate_payment_qr\`, hiển thị ảnh QR Solana Pay và hướng dẫn họ dùng ví Phantom/Solflare (Devnet) quét mã để hoàn tất. Sau khi QR hiển thị, AI tuyệt đối im lặng để khách thao tác chuyển tiền.
-
-## QUY TẮC CỐT LÕI
-1. Luôn lịch sự, xưng hô phù hợp (dạ, em, anh/chị...).
-2. Báo trước khi gọi tool bằng câu siêu ngắn (hoặc gọi luôn không cần nói): "Dạ để em check nhanh nhé..." hoặc "Dạ em tạo đơn ngay nhé..."
-3. Luôn nhắc nhở khách thanh toán bằng USDC trên mạng Solana Devnet.
-4. Danh sách kho hàng thực tế được cập nhật tự động từ database ở cuối system prompt. Chỉ tư vấn/báo giá sản phẩm có trong danh sách đó hoặc qua kết quả \`check_inventory\`.`;
+  throw error;
 }
 
 // Load SYSTEM_PROMPT_VOICE từ file system-prompt-voice.md (cho voice agent)
@@ -60,9 +33,7 @@ try {
   console.log('[AI Agent] ✅ Đã load System Prompt (Voice) từ file system-prompt-voice.md');
 } catch (error) {
   console.error('[AI Agent] ❌ Lỗi khi đọc file system-prompt-voice.md:', error.message);
-  // Fallback: dùng prompt text nếu không có voice prompt
-  SYSTEM_PROMPT_VOICE = SYSTEM_PROMPT;
-  console.warn('[AI Agent] ⚠️ Fallback: Dùng text prompt cho voice agent');
+  throw error;
 }
 
 // Load SYSTEM_PROMPT_EN từ file (cho text chat tiếng Anh)
@@ -73,10 +44,7 @@ try {
   console.log('[AI Agent] ✅ Đã load System Prompt (EN Text) từ file system-prompt-en.md');
 } catch (error) {
   console.error('[AI Agent] ❌ Lỗi khi đọc file system-prompt-en.md:', error.message);
-  SYSTEM_PROMPT_EN = `You are a professional Sales Agent for the "ShopTalk" store.
-Your mission: advise on products, check inventory, create orders, and guide customers to pay via USDC on Solana (Devnet).
-Always respond in English. Use tools: check_inventory, create_order, generate_payment_qr, get_reviews, log_feedback.
-Collect full name, phone number, and shipping address before calling create_order.`;
+  throw error;
 }
 
 // Load SYSTEM_PROMPT_VOICE_EN (cho voice agent tiếng Anh)
@@ -87,7 +55,7 @@ try {
   console.log('[AI Agent] ✅ Đã load System Prompt (EN Voice) từ file system-prompt-voice-en.md');
 } catch (error) {
   console.error('[AI Agent] ❌ Lỗi khi đọc file system-prompt-voice-en.md:', error.message);
-  SYSTEM_PROMPT_VOICE_EN = SYSTEM_PROMPT_EN;
+  throw error;
 }
 
 const normalizeLanguage = (language) => (
