@@ -316,23 +316,27 @@ const callChatCompletions = async (apiUrl, apiKey, payload, retries = 3, delay =
         } else if (data && data.error && data.error.message) {
           const match = data.error.message.match(/try again in ([\d.]+)s/i);
           if (match && match[1]) {
-            waitTime = Math.ceil(parseFloat(match[1]) * 1000) + 1000; // Add 1s safety buffer
+            waitTime = Math.ceil(parseFloat(match[1]) * 1000) + 500; // Reduced safety buffer from 1s to 0.5s
             console.warn(`[AI Agent] ⏳ Parsed rate limit cooldown from error message: ${waitTime}ms`);
           }
         }
         
+        // Cap maximum retry delay at 5 seconds to avoid long frontend waits
+        waitTime = Math.min(waitTime, 5000);
+        
         console.warn(`[AI Agent] ⏳ Rate limit hit (Status: ${response.status}). Retrying in ${waitTime}ms... (Attempt ${i + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
-        delay = waitTime * 2;
+        delay = Math.min(waitTime * 1.5, 5000); // Gentler exponential backoff, capped at 5s
         continue;
       }
 
       return { response, data };
     } catch (err) {
       if (i === retries - 1) throw err;
-      console.warn(`[AI Agent] ⏳ Connection error: ${err.message}. Retrying in ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 2;
+      const cappedDelay = Math.min(delay, 3000); // Cap connection retry delay at 3s
+      console.warn(`[AI Agent] ⏳ Connection error: ${err.message}. Retrying in ${cappedDelay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, cappedDelay));
+      delay = Math.min(delay * 1.5, 3000); // Gentler backoff for connection errors
     }
   }
 };
@@ -1278,8 +1282,8 @@ const chat = async (sessionId, userMessage, language = 'vi') => {
       // Gọi lại API lần tiếp theo với kết quả của tool
       const nextModel = process.env.GROQ_TOOL_MODEL || modelName;
       if (apiKey === groqApiKey) {
-        console.log(`[AI Agent] ⏳ Chờ 4 giây trước khi gọi tiếp Groq API để tránh rate limit (TPM)...`);
-        await new Promise(resolve => setTimeout(resolve, 4000));
+        console.log(`[AI Agent] ⏳ Chờ 2 giây trước khi gọi tiếp Groq API để tránh rate limit (TPM)...`);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Reduced from 4s to 2s
       }
       ({ data } = await callChatCompletions(apiUrl, apiKey, {
         model: nextModel,

@@ -257,6 +257,7 @@ const parseMessageContent = (content, onShowQr, t) => {
 function ChatBubble({ message, onShowQr, t }) {
   const isUser = message.role === 'user';
   const isStaff = message.sender === 'staff';
+  const isError = message.role === 'system' && message.isError;
 
   if (message.type === 'voice') {
     return <TranscriptBubble message={message} />;
@@ -275,12 +276,19 @@ function ChatBubble({ message, onShowQr, t }) {
           {t('chat.staff_label', 'Nhân viên hỗ trợ')}
         </span>
       )}
+      {isError && (
+        <span className="text-[10px] font-semibold text-red-600 mb-1 ml-1">
+          ⚠️ {t('chat.error_label', 'Lỗi kết nối')}
+        </span>
+      )}
       <div
         className={`max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm ${isUser
           ? 'rounded-br-sm bg-teal-600 text-white'
-          : isStaff
-            ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-950'
-            : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
+          : isError
+            ? 'rounded-bl-sm border border-red-200 bg-red-50 text-red-800'
+            : isStaff
+              ? 'rounded-bl-sm border border-amber-200 bg-amber-50 text-amber-950'
+              : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
           }`}
       >
         {isUser ? message.content : parseMessageContent(message.content, onShowQr, t)}
@@ -725,16 +733,11 @@ function ChatWidget() {
 
     let response;
     try {
-      try {
-        response = await api.sendChatMessage(text, sessionId, currentLang);
-        if (!response.success) {
-          throw new Error(response.error || 'Chat API returned an unsuccessful response');
-        }
-        setIsMockMode(false);
-      } catch (_) {
-        response = buildMockChatResponse(text, sessionId || generateId(), t, currentLang);
-        setIsMockMode(true);
+      response = await api.sendChatMessage(text, sessionId, currentLang);
+      if (!response.success) {
+        throw new Error(response.error || 'Chat API returned an unsuccessful response');
       }
+      setIsMockMode(false);
 
       const nextSessionId = response.sessionId || sessionId;
       if (nextSessionId) {
@@ -762,6 +765,30 @@ function ChatWidget() {
         setPaidReceipt(null);
         setQrPayload({ qrCodeImage: response.qrCodeImage, order });
       }
+    } catch (error) {
+      // Remove Mock data fallback - show proper error instead
+      console.error('[Chat Error]', error.message);
+      
+      const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+      const errorMessage = isTimeout
+        ? (currentLang === 'en' 
+          ? 'The request is taking longer than usual. Please wait a moment and try again.'
+          : 'Yêu cầu đang mất nhiều thời gian hơn bình thường. Vui lòng đợi một chút và thử lại.')
+        : (currentLang === 'en'
+          ? 'Unable to connect to the server. Please check your connection and try again.'
+          : 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối và thử lại.');
+      
+      setMessages((current) => [
+        ...current,
+        {
+          id: generateId(),
+          role: 'system',
+          content: errorMessage,
+          isError: true
+        }
+      ]);
+      
+      setIsMockMode(false); // Never set mock mode
     } finally {
       setIsTyping(false);
     }

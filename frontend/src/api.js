@@ -7,7 +7,7 @@ const http = axios.create({
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 12000
+  timeout: 60000 // Increased from 12s to 60s to handle backend retries
 });
 
 const tryEndpoints = async (method, endpoints, payload) => {
