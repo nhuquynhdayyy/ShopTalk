@@ -293,6 +293,30 @@ const updateOrderWithdrawalStatus = async (id, isWithdrawn = true) => {
   }
 };
 
+/**
+ * Cập nhật thông tin khách hàng (customer_name, customer_phone, customer_address) theo ID đơn hàng
+ * @param {string} id - UUID của đơn hàng
+ * @param {string} customerName - Tên khách hàng mới
+ * @param {string} customerPhone - Số điện thoại mới
+ * @param {string} customerAddress - Địa chỉ giao hàng mới
+ * @returns {Promise<Object|null>} Đơn hàng đã cập nhật hoặc null nếu không tìm thấy
+ */
+const updateOrderCustomerInfo = async (id, customerName, customerPhone, customerAddress) => {
+  const queryText = `
+    UPDATE orders
+    SET customer_name = $2, customer_phone = $3, customer_address = $4
+    WHERE id = $1
+    RETURNING *;
+  `;
+  try {
+    const res = await db.query(queryText, [id, customerName, customerPhone, customerAddress]);
+    return res.rows[0] || null;
+  } catch (error) {
+    console.error(`Lỗi trong updateOrderCustomerInfo với ID ${id}:`, error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   createOrder,
   getOrderById,
@@ -305,6 +329,7 @@ module.exports = {
   getPaymentReminderCandidates,
   markPaymentReminderSent,
   updateOrderWithdrawalStatus,
+  updateOrderCustomerInfo,
 };
 
 

@@ -90,6 +90,19 @@ const withdrawOrder = async (orderId) => {
   }
 };
 
+const updateOrderCustomerInfo = async (orderId, customerInfo) => {
+  try {
+    const response = await http.patch(`/orders/${orderId}`, customerInfo);
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      const response = await http.patch(`/api/orders/${orderId}`, customerInfo);
+      return response.data;
+    }
+    throw error;
+  }
+};
+
 export default {
   http,
   sendChatMessage,
@@ -99,5 +112,6 @@ export default {
   startAgoraAgent,
   getOrderById,
   withdrawOrder,
+  updateOrderCustomerInfo,
   API_BASE_URL
 };

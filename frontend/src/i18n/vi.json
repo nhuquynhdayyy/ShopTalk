@@ -191,7 +191,12 @@
       "address": "Địa chỉ",
       "wallet": "Địa chỉ ví người bán",
       "copied": "Đã copy",
-      "copy_btn": "Copy địa chỉ ví"
+      "copy_btn": "Copy địa chỉ ví",
+      "edit_info": "Chỉnh sửa thông tin",
+      "confirm_regenerate": "Xác nhận & Cập nhật QR",
+      "cancel": "Huỷ",
+      "updating": "Đang cập nhật...",
+      "info_updated": "Cập nhật thông tin thành công!"
     },
     "status": {
       "pending": "Đang chờ",

@@ -272,5 +272,66 @@ router.patch('/:id/withdraw', async (req, res) => {
   }
 });
 
+/**
+ * Route: PATCH /orders/:id
+ * Mô tả: Cập nhật thông tin cá nhân khách hàng (customer_name, customer_phone, customer_address) và sinh lại QR Code.
+ */
+router.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { customer_name, customer_phone, customer_address } = req.body;
+
+    if (!customer_name || !customer_phone || !customer_address) {
+      return res.status(400).json({
+        success: false,
+        error: 'Thiếu thông tin cập nhật (tên, số điện thoại, hoặc địa chỉ)'
+      });
+    }
+
+    const { updateOrderCustomerInfo } = require('../models/order.model');
+    const updatedOrder = await updateOrderCustomerInfo(id, customer_name, customer_phone, customer_address);
+
+    if (!updatedOrder) {
+      return res.status(404).json({
+        success: false,
+        error: `Không tìm thấy đơn hàng với ID: ${id}`
+      });
+    }
+
+    // Phát sự kiện Socket để Dashboard cập nhật thông tin trong thời gian thực
+    try {
+      const { getIo } = require('../websocket/socket.server');
+      const io = getIo();
+      if (io) {
+        io.emit('order_status_updated', updatedOrder);
+        console.log(`[Socket.io] 📢 Đã phát sự kiện 'order_status_updated' sau khi cập nhật thông tin khách hàng cho đơn hàng #${id}`);
+      }
+    } catch (wsErr) {
+      console.error('[Socket.io] Lỗi khi phát sự kiện cập nhật thông tin khách hàng:', wsErr.message);
+    }
+
+    // Tạo lại QR Code mới với thông tin khách hàng vừa cập nhật (cùng reference, cùng amount)
+    const { createPaymentRequest, generateQRCode } = require('../services/solanaPay.service');
+    const paymentUrl = createPaymentRequest(updatedOrder);
+    const qrCodeImage = await generateQRCode(paymentUrl);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Cập nhật thông tin khách hàng thành công!',
+      data: {
+        order: updatedOrder,
+        qrCodeImage
+      }
+    });
+
+  } catch (error) {
+    console.error(`Lỗi khi PATCH /orders/${req.params.id}:`, error.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Lỗi hệ thống khi cập nhật thông tin đơn hàng'
+    });
+  }
+});
+
 module.exports = router;
 

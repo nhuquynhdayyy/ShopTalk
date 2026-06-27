@@ -369,6 +369,20 @@ function ChatWidget() {
     setPaidReceipt((current) => (current ? localizeOrder(current, currentLang) : current));
   }, [currentLang, t]);
 
+  const handleUpdateQrPayload = useCallback((updatedOrder, newQrCodeImage) => {
+    setQrPayload((current) => {
+      if (!current) return null;
+      return {
+        ...current,
+        qrCodeImage: newQrCodeImage,
+        order: localizeOrder({
+          ...current.order,
+          ...updatedOrder
+        }, currentLang)
+      };
+    });
+  }, [currentLang]);
+
   const handleVoiceOrderCreated = useCallback((data) => {
     console.log('[Socket.io] Nhận sự kiện voice_order_created:', data);
     setPaidReceipt(null);
@@ -916,6 +930,7 @@ function ChatWidget() {
         qrCodeImage={qrPayload?.qrCodeImage}
         order={qrPayload?.order}
         onClose={() => setQrPayload(null)}
+        onUpdateOrder={handleUpdateQrPayload}
       />
     </>
   );

@@ -191,7 +191,12 @@
       "address": "Address",
       "wallet": "Seller Wallet Address",
       "copied": "Copied",
-      "copy_btn": "Copy Address"
+      "copy_btn": "Copy Address",
+      "edit_info": "Edit Info",
+      "confirm_regenerate": "Confirm & Regenerate QR",
+      "cancel": "Cancel",
+      "updating": "Updating...",
+      "info_updated": "Info updated successfully!"
     },
     "status": {
       "pending": "Pending",
