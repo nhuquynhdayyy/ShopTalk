@@ -10,6 +10,7 @@ const paymentRouter = require('./routes/payment.routes');
 const aiRouter = require('./routes/ai.routes');
 const agentToolsRouter = require('./routes/agent-tools.routes');
 const agoraRouter = require('./routes/agora.routes');
+const webhookRouter = require('./routes/webhook.routes');
 const { startPaymentWatcher, stopPaymentWatcher } = require('./workers/paymentWatcher');
 const { startExpirationCron, stopExpirationCron } = require('./workers/expirationCron');
 const { startPaymentReminderWorker, stopPaymentReminderWorker } = require('./workers/paymentReminder.worker');
@@ -33,6 +34,7 @@ app.use('/payment', paymentRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/agora', agoraRouter);
 app.use('/api/agent-tools', agentToolsRouter);
+app.use('/', webhookRouter);
 
 // Endpoint mặc định kiểm tra trạng thái hoạt động của Server
 app.get('/', (req, res) => {
@@ -74,4 +76,3 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 module.exports = app;
-
